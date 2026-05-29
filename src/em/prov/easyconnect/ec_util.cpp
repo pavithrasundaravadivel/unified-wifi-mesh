@@ -1,10 +1,10 @@
-#include <ctype.h>
-#include <functional>
+#include <experimental/functional>
 #include <arpa/inet.h>
 #include <cstddef>
+#include <cstring>
 #include <fstream>
 #include <sstream>
-#include <filesystem>
+#include <sys/stat.h>
 
 #include "ec_util.h"
 #include "util.h"
@@ -12,6 +12,15 @@
 #include "em_crypto.h"
 #include "dm_easy_mesh.h"
 #include "cjson_util.h"
+
+
+#if __cplusplus >= 201703L
+    #include <filesystem>
+    namespace filesystem = std::filesystem;
+#else
+    #include <experimental/filesystem>
+    namespace filesystem = std::experimental::filesystem;
+#endif
 
 void ec_util::init_frame(ec_frame_t *frame)
 {
@@ -90,7 +99,9 @@ uint16_t ec_util::freq_to_channel_attr(unsigned int freq)
 {
     auto op_chan = util::em_freq_to_chan(freq);
 
-    auto [op_class, channel] = op_chan;
+    auto tmp = op_chan;
+    auto op_class = tmp.first;
+    auto channel = tmp.second;
     
     return static_cast<uint16_t>((op_class << 8) | (0x00ff & channel));
 }
@@ -152,7 +163,11 @@ uint8_t *ec_util::add_wrapped_data_attr(uint8_t *frame, size_t frame_len, uint8_
     */
 
     // Use the provided function to create wrap_attribs and wrapped_len
-    auto [wrap_attribs, wrapped_len] = create_wrap_attribs();
+    
+auto tmp = create_wrap_attribs();
+
+auto wrap_attribs = tmp.first;
+auto wrapped_len = tmp.second;
 
     // Encapsulate the attributes in a wrapped data attribute
     uint16_t wrapped_attrib_len = wrapped_len + AES_BLOCK_SIZE;
@@ -533,7 +548,9 @@ std::string ec_util::generate_channel_list(const std::string& ssid, std::unorder
     std::string channel_list;
     bool first_group = true;
 
-    for (const auto &[opclass, channels] : grouped_channels) {
+    for (const auto &op_ch : grouped_channels) {
+        auto opclass = op_ch.first;
+        auto channels = op_ch.second;
         if (!first_group)
             channel_list += ",";
         first_group = false;
@@ -602,7 +619,9 @@ std::map<dpp_uri_field, std::string> ec_util::encode_bootstrap_data(ec_data_t *b
                 unsigned int freq = boot_data->ec_freqs[i];
                 if (freq == 0) continue;
 
-                auto [op_class, channel] = util::em_freq_to_chan(freq);
+                auto op_chan = util::em_freq_to_chan(freq);
+                auto op_class = op_chan.first;
+                auto channel = op_chan.second;
                 value += std::to_string(static_cast<int>(op_class)) + "/" +
                          std::to_string(static_cast<int>(channel));
                 value += ",";
@@ -637,7 +656,9 @@ std::optional<std::string> ec_util::encode_bootstrap_data_uri(ec_data_t *boot_da
 {
     auto uri_map = ec_util::encode_bootstrap_data(boot_data);
     std::string uri = "DPP:";
-    for (const auto &[uri_type, value] : uri_map) {
+    for (const auto &tv : uri_map) {
+        auto uri_type = tv.first;
+        auto value = tv.second;
         auto field_char = get_dpp_uri_field_char(uri_type);
         if (!field_char) {
             printf("Found unknown DPP URI field but not encoding\n");
@@ -659,7 +680,9 @@ std::optional<std::string> ec_util::encode_bootstrap_data_json(ec_data_t *boot_d
 
     cJSON* uri_obj = cJSON_AddObjectToObject(json, "URI");
 
-    for (const auto &[uri_type, value] : uri_map) {
+    for (const auto &type_value : uri_map) {
+        auto uri_type = type_value.first;
+        auto value = type_value.second;
         auto field_char = get_dpp_uri_field_char(uri_type);
         if (!field_char) {
             em_printfout("Found unknown DPP URI field but not encoding");
@@ -693,7 +716,9 @@ std::optional<std::string> ec_util::encode_bootstrap_data_json(ec_data_t *boot_d
 bool ec_util::decode_bootstrap_data(std::map<dpp_uri_field, std::string> uri_map,
                                     ec_data_t *boot_data, std::string country_code)
 {
-    for (const auto &[uri_type, value] : uri_map) {
+    for (const auto &type_value : uri_map) {
+        auto uri_type = type_value.first;
+        auto value = type_value.second;
         switch (uri_type) {
         case DPP_URI_VERSION: {
             auto version = strtol(value.c_str(), nullptr, 10);
@@ -712,7 +737,9 @@ bool ec_util::decode_bootstrap_data(std::map<dpp_uri_field, std::string> uri_map
             auto class_channel_pairs = ec_util::parse_dpp_uri_channel_list(value);
             EM_ASSERT_MSG_TRUE(!class_channel_pairs.empty(), false, "Failed to parse channel list");
             for (size_t idx = 0; idx < class_channel_pairs.size(); idx++) {
-                auto [op_class, channel] = class_channel_pairs[idx];
+                auto pair = class_channel_pairs[idx];
+                auto op_class = pair.first;
+                auto channel = pair.second;
                 int freq = util::em_chan_to_freq(static_cast<uint8_t>(op_class),
                                                  static_cast<uint8_t>(channel), country_code);
                 if (freq <= 0) {
@@ -815,9 +842,9 @@ bool ec_util::decode_bootstrap_data_json(const cJSON *json_obj, ec_data_t *boot_
             return false;
         }
         if (cJSON_IsString(object_item)) {
-            uri_map[*uri_type] = std::string(cJSON_GetStringValue(object_item));
+            uri_map[*uri_type] = std::string(cJSON_GetStringValue(const_cast<cJSON*>(object_item)));
         } else if (cJSON_IsNumber(object_item)) {
-            uri_map[*uri_type] = std::to_string(cJSON_GetNumberValue(object_item));
+            uri_map[*uri_type] = std::to_string(cJSON_GetNumberValue(const_cast<cJSON*>(object_item)));
         } else {
             em_printfout("Key '%s' is not a string or number, invalid URI! Exiting", key);
             return false;
@@ -850,7 +877,7 @@ bool ec_util::read_bootstrap_data_from_files(ec_data_t *boot_data, const std::st
     em_printfout("Successfully read DPP URI from path '%s'", file_path.c_str());
 
     // Read the PEM file if it is provided
-    if (pem_file_path.has_value()) {
+    if (pem_file_path) {
         SSL_KEY* pem_key = em_crypto_t::read_keypair_from_pem(*pem_file_path);
         if (pem_key == NULL) {
             printf("%s:%d: Failed to read PEM file at path '%s'\n", __func__, __LINE__,
@@ -996,12 +1023,12 @@ bool ec_util::get_dpp_boot_data(ec_data_t *boot_data, mac_addr_t al_mac, bool do
 
 bool ec_util::write_persistent_sec_ctx(std::string folder_path, const ec_persistent_sec_ctx_t& sec_ctx){
     EM_ASSERT_MSG_TRUE(!folder_path.empty(), false, "Provided empty folder path for persistant security context keys");
-    EM_ASSERT_MSG_TRUE(std::filesystem::exists(folder_path), false, "Provided path does not exist");
-    EM_ASSERT_MSG_TRUE(std::filesystem::is_directory(folder_path), false, "Provided path is not a directory");
+    EM_ASSERT_MSG_TRUE(filesystem::exists(folder_path), false, "Provided path does not exist");
+    EM_ASSERT_MSG_TRUE(filesystem::is_directory(folder_path), false, "Provided path is not a directory");
 
-    auto dir = std::filesystem::path(folder_path);
+    auto dir = filesystem::path(folder_path);
     auto write_key_to_file = [&](const SSL_KEY* key, const std::string& file) -> bool {
-        std::filesystem::path full_path = dir / file;
+        filesystem::path full_path = dir / file;
 
         if (!em_crypto_t::write_keypair_to_pem(key, full_path.string())) {
             em_printfout("Failed to write key to file %s", full_path.string().c_str());
@@ -1026,14 +1053,14 @@ bool ec_util::write_persistent_sec_ctx(std::string folder_path, const ec_persist
 
 std::optional<ec_persistent_sec_ctx_t> ec_util::read_persistent_sec_ctx(std::string folder_path){
     EM_ASSERT_MSG_TRUE(!folder_path.empty(), {}, "Provided empty folder path for persistant security context keys");
-    EM_ASSERT_MSG_TRUE(std::filesystem::exists(folder_path), {}, "Provided path does not exist");
-    EM_ASSERT_MSG_TRUE(std::filesystem::is_directory(folder_path), {}, "Provided path is not a directory");
+    EM_ASSERT_MSG_TRUE(filesystem::exists(folder_path), {}, "Provided path does not exist");
+    EM_ASSERT_MSG_TRUE(filesystem::is_directory(folder_path), {}, "Provided path is not a directory");
 
     ec_persistent_sec_ctx_t sec_ctx;
 
-    auto dir = std::filesystem::path(folder_path);
+    auto dir = filesystem::path(folder_path);
     auto read_key_from_file = [&](const std::string& file) -> SSL_KEY* {
-        std::filesystem::path full_path = dir / file;
+        filesystem::path full_path = dir / file;
         SSL_KEY* key = em_crypto_t::read_keypair_from_pem(full_path.string());
         return key;
     };
@@ -1057,8 +1084,8 @@ std::optional<ec_persistent_sec_ctx_t> ec_util::read_persistent_sec_ctx(std::str
     }
 
     // Read connector from folder
-    std::filesystem::path connector_path = dir / DPP_CONNECTOR_FILE;
-    if (!std::filesystem::exists(connector_path)) {
+    filesystem::path connector_path = dir / DPP_CONNECTOR_FILE;
+    if (!filesystem::exists(connector_path)) {
         em_printfout("Connector file does not exist at path '%s', not reading it.", connector_path.string().c_str());
         return sec_ctx;
     }
@@ -1128,7 +1155,7 @@ std::optional<std::string> ec_util::generate_dpp_connector(ec_persistent_sec_ctx
     std::optional<std::string> null_expiry = std::nullopt;
     cJSON *jwsPayloadObj = ec_crypto::create_jws_payload(groups, sec_ctx.net_access_key, null_expiry, DPP_VERSION);
     auto connector = ec_crypto::generate_connector(jwsHeaderObj, jwsPayloadObj, sec_ctx.C_signing_key);
-    if (!connector.has_value()) {
+    if (!connector) {
         em_printfout("Failed to generate DPP connector");
         cJSON_free(jwsHeaderObj);
         cJSON_free(jwsPayloadObj);

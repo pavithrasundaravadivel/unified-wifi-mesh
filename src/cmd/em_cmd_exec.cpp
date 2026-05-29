@@ -375,12 +375,27 @@ int em_cmd_exec_t::init()
     OpenSSL_add_all_algorithms();
     SSL_load_error_strings();
 
-    method = TLS_server_method();
+        #if OPENSSL_VERSION_NUMBER < 0x10100000L
+            method = SSLv23_server_method();
+        #else
+            method = TLS_server_method();
+        #endif
     if ((m_ssl_ctx = SSL_CTX_new(method)) == NULL) {
         printf("%s:%d: Failed to create SSL context\n", __func__, __LINE__);
         return -1;
     }
+    
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    SSL_CTX_set_options(m_ssl_ctx,
+        SSL_OP_NO_SSLv2 |
+        SSL_OP_NO_SSLv3 |
+        SSL_OP_NO_TLSv1 |
+        SSL_OP_NO_TLSv1_1
+    );
+#else
     SSL_CTX_set_min_proto_version(m_ssl_ctx, TLS1_2_VERSION);
+#endif
+
     SSL_CTX_set_cipher_list(m_ssl_ctx, "ALL:eNULL");
 
     if (SSL_CTX_load_verify_locations(m_ssl_ctx, EM_CERT_FILE, EM_KEY_FILE) != 1) {

@@ -44,6 +44,7 @@
 #include "em_cmd_sta_list.h"
 #include "em_cmd_ap_cap.h"
 #include "tr_181.h"
+#include "collection.h"
 
 dm_network_t *dm_easy_mesh_list_t::get_first_network()
 {

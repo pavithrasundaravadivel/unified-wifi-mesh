@@ -40,7 +40,8 @@ void ec_configurator_t::handle_1905_handshake_completed(uint8_t peer_mac[ETH_ALE
 ec_configurator_t::~ec_configurator_t()
 {
 
-    for (auto& [_, c_ctx] : m_connections) {
+    for (auto& kv : m_connections) {
+        auto& c_ctx = kv.second;
         ec_crypto::free_connection_ctx(&c_ctx);
     }
     // Only write the persistent security context if this is a controller 

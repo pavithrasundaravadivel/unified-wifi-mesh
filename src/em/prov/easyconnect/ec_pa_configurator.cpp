@@ -51,7 +51,9 @@ bool ec_pa_configurator_t::handle_presence_announcement(ec_frame_t *frame, size_
         // If no matching hash value is found, the Proxy Agent shall send a Chirp Notification message to the 
         // Controller with a DPP Chirp Value TLV
         em_printfout("No matching hash value found for '%s' in the DPP Presence Announcement frame", B_r_hash_str.c_str());
-        const auto [chirp_tlv, chirp_tlv_len] = ec_util::create_dpp_chirp_tlv(true, true, src_mac, B_r_hash_attr->data, B_r_hash_attr->length);
+        const auto tmp = ec_util::create_dpp_chirp_tlv(true, true, src_mac, B_r_hash_attr->data, B_r_hash_attr->length);
+        const auto chirp_tlv = tmp.first;
+        const auto chirp_tlv_len = tmp.second;
         ASSERT_NOT_NULL(chirp_tlv, false, "%s:%d Failed to create DPP Chirp Value TLV\n", __func__, __LINE__);
         sent = m_send_chirp_notification(chirp_tlv, chirp_tlv_len, m_ctrl_al_mac_addr.data());
         free(chirp_tlv);
@@ -89,7 +91,9 @@ bool ec_pa_configurator_t::handle_recfg_announcement(ec_frame_t *frame, size_t l
         sent = m_send_action_frame(sa, encap_frame_vec.data(), encap_frame_vec.size(), 0, 0);
     } else {
         em_printfout("No matching C-sign key hash found in DPP Reconfiguration Announcement frame, sending Reconfiguration Announcement frame to controller");
-        auto [encap_frame, encap_frame_len] = ec_util::create_encap_dpp_tlv(false, sa, ec_frame_type_recfg_announcement, reinterpret_cast<uint8_t*>(frame), len);
+        auto tmp = ec_util::create_encap_dpp_tlv(false, sa, ec_frame_type_recfg_announcement, reinterpret_cast<uint8_t*>(frame), len);
+        auto encap_frame = tmp.first;
+        auto encap_frame_len = tmp.second;
         ASSERT_NOT_NULL(encap_frame, false, "%s:%d: Failed to create Encap DPP TLV for Reconfiguration Announcement frame\n", __func__, __LINE__);
         sent = m_send_prox_encap_dpp_msg(encap_frame, encap_frame_len, nullptr, 0, m_ctrl_al_mac_addr.data());
         free(encap_frame);
@@ -102,7 +106,9 @@ bool ec_pa_configurator_t::handle_auth_response(ec_frame_t *frame, size_t len, u
     (void)src_al_mac; // Unused parameter in proxy agent
     em_printfout("Received a DPP Authentication Response frame from '" MACSTRFMT "'\n", MAC2STR(src_mac));
     // Encapsulate 802.11 frame into 1905 Encap DPP TLV and send to controller
-    auto [encap_dpp_tlv, encap_dpp_size] = ec_util::create_encap_dpp_tlv(false, src_mac, ec_frame_type_auth_rsp, reinterpret_cast<uint8_t*>(frame), len);
+    auto tmp = ec_util::create_encap_dpp_tlv(false, src_mac, ec_frame_type_auth_rsp, reinterpret_cast<uint8_t*>(frame), len);
+    auto encap_dpp_tlv = tmp.first;
+    auto encap_dpp_size = tmp.second;
     ASSERT_NOT_NULL(encap_dpp_tlv, false, "%s:%d Failed to create Encap DPP TLV\n", __func__, __LINE__);
 
     // Only create and forward an Encap TLV
@@ -123,7 +129,9 @@ bool ec_pa_configurator_t::handle_cfg_request(uint8_t *buff, unsigned int len, u
     // Configuration Request frame and shall set the Enrollee MAC Address Present field to one, include the Enrollee's MAC
     // address in the Destination STA MAC Address field, set the DPP Frame Indicator field to one and the Frame Type field to
     // 255, and send the message to the Multi-AP Controller.
-    auto [encap_dpp_tlv, encap_dpp_tlv_len] = ec_util::create_encap_dpp_tlv(true, sa, static_cast<ec_frame_type_t>(ec_frame_type_easymesh), buff, len);
+    auto tmp = ec_util::create_encap_dpp_tlv(true, sa, static_cast<ec_frame_type_t>(ec_frame_type_easymesh), buff, len);
+    auto encap_dpp_tlv = tmp.first;
+    auto encap_dpp_tlv_len = tmp.second;
     ASSERT_NOT_NULL(encap_dpp_tlv, false, "%s:%d: Could not create Encap DPP TLV!\n", __func__, __LINE__);
     bool sent = m_send_prox_encap_dpp_msg(encap_dpp_tlv, encap_dpp_tlv_len, nullptr, 0, m_ctrl_al_mac_addr.data());
     if (!sent) {
@@ -142,7 +150,9 @@ bool ec_pa_configurator_t::handle_cfg_result(ec_frame_t *frame, size_t len, uint
     // Address field to the MAC address of the Enrollee, set the DPP Frame Indicator field to 0 and the Frame Type field to 11,
     // and send the Proxied Encap DPP message to the Multi-AP Controller.
 
-    auto [encap_dpp_tlv, encap_dpp_tlv_len] = ec_util::create_encap_dpp_tlv(false, sa, ec_frame_type_cfg_result, reinterpret_cast<uint8_t*>(frame), len);
+    auto tmp = ec_util::create_encap_dpp_tlv(false, sa, ec_frame_type_cfg_result, reinterpret_cast<uint8_t*>(frame), len);
+    auto encap_dpp_tlv = tmp.first;
+    auto encap_dpp_tlv_len = tmp.second;
     ASSERT_NOT_NULL(encap_dpp_tlv, false, "%s:%d: Failed to create Encap DPP TLV\n", __func__, __LINE__);
     bool sent = m_send_prox_encap_dpp_msg(encap_dpp_tlv, encap_dpp_tlv_len, nullptr, 0, m_ctrl_al_mac_addr.data());
     if (!sent) {
@@ -162,7 +172,9 @@ bool ec_pa_configurator_t::handle_connection_status_result(ec_frame_t *frame, si
     // Address field to the MAC address of the Enrollee, set the DPP Frame Indicator field to 0 and the Frame Type field to 12,
     // and send the Proxied Encap DPP message to the Multi-AP Controller
 
-    auto [encap_dpp_tlv, encap_dpp_tlv_len] = ec_util::create_encap_dpp_tlv(false, sa, ec_frame_type_conn_status_result, reinterpret_cast<uint8_t*>(frame), len);
+    auto tmp = ec_util::create_encap_dpp_tlv(false, sa, ec_frame_type_conn_status_result, reinterpret_cast<uint8_t*>(frame), len);
+    auto encap_dpp_tlv = tmp.first;
+    auto encap_dpp_tlv_len = tmp.second;
     ASSERT_NOT_NULL(encap_dpp_tlv, false, "%s:%d: Failed to create Encap DPP TLV\n", __func__, __LINE__);
     bool sent = m_send_prox_encap_dpp_msg(encap_dpp_tlv, encap_dpp_tlv_len, nullptr, 0, m_ctrl_al_mac_addr.data());
     if (!sent) {
@@ -326,7 +338,7 @@ bool ec_pa_configurator_t::process_proxy_encap_dpp_msg(em_encap_dpp_t *encap_tlv
         case ec_frame_type_recfg_auth_req: {
             ec_frame_t *frame = reinterpret_cast<ec_frame_t*>(encap_frame);
             auto c_sign_key_hash_attr = ec_util::get_attrib(frame->attributes, static_cast<uint16_t>(encap_frame_len - EC_FRAME_BASE_SIZE), ec_attrib_id_C_sign_key_hash);
-            if (!c_sign_key_hash_attr.has_value()) {
+            if (!c_sign_key_hash_attr) {
                 em_printfout("No C-sign key hash attribute found in DPP Reconfiguration Authentication Request frame");
                 free(encap_frame);
                 return false;
@@ -441,7 +453,9 @@ bool ec_pa_configurator_t::send_prepare_for_fragmented_frames_frame(uint8_t dest
 
     // Inform GAS peer that we're going to be sending them a fragmented frame via the 
     // GAS Comeback mechanism by first sending a GAS Initial Response with resp_len = 0  and / or delay > 0
-    auto [gas_initial_resp_frame, gas_initial_resp_frame_len] = ec_util::alloc_gas_frame(dpp_gas_initial_resp, dialog_token);
+    auto tmp = ec_util::alloc_gas_frame(dpp_gas_initial_resp, dialog_token);
+    auto gas_initial_resp_frame = tmp.first;
+    auto gas_initial_resp_frame_len = tmp.second;
     if (gas_initial_resp_frame == nullptr) {
         em_printfout("Could not allocate GAS Initial Response frame");
         return false;
@@ -461,9 +475,11 @@ std::vector<ec_gas_comeback_response_frame_t *> ec_pa_configurator_t::fragment_l
     uint8_t frag_id = 0;
 
     while (offset < len) {
-        size_t chunk_size = std::min(WIFI_MTU_SIZE, len - offset);
+        size_t chunk_size = std::min((size_t)WIFI_MTU_SIZE, len - offset);
 
-        auto [base_frame, base_len] = ec_util::alloc_gas_frame(dpp_gas_comeback_resp, dialog_token);
+        auto tmp = ec_util::alloc_gas_frame(dpp_gas_comeback_resp, dialog_token);
+        auto base_frame = tmp.first;
+        auto base_len = tmp.second;
         if (!base_frame) {
             em_printfout("Failed to allocate GAS Comeback Response frame for frag #%d", frag_id);
             for (auto *f : fragments) {

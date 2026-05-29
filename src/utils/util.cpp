@@ -185,7 +185,9 @@ void util::print_hex_dump(unsigned int length, uint8_t *buffer, easymesh_dbg_typ
     uint8_t buff[512] = {};
     const uint8_t * pc = const_cast<const uint8_t *>(buffer);
 
-    auto [fp, module_filename] = get_module_log_fd_name(module, EM_LOG_LVL_DEBUG);
+    auto result = get_module_log_fd_name(module, EM_LOG_LVL_DEBUG);
+    FILE *fp = result.first;
+    auto module_filename = result.second;
     if (fp == NULL) {
         return;
     }
@@ -234,7 +236,9 @@ void util::em_util_print(easymesh_log_level_t level, easymesh_dbg_type_t module,
     
     const char *severity;
 
-    auto [fp, module_filename] = get_module_log_fd_name(module, level);
+    auto result = get_module_log_fd_name(module, level);
+    FILE *fp = result.first;
+    auto module_filename = result.second;
     if (fp == NULL) return; 
 
 

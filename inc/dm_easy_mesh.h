@@ -40,6 +40,7 @@
 #include "dm_assoc_sta_mld.h"
 #include "dm_tid_to_link.h"
 #include "webconfig_external_proto.h"
+#include "collection.h"
 
 #define GLOBAL_NET_ID "OneWifiMesh"
 

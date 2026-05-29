@@ -34,7 +34,22 @@
 #include <openssl/core_names.h>
 #endif
 
-#include <optional>
+#if __cplusplus >= 201703L
+    #include <optional>
+    using std::optional;
+    using std::nullopt;
+#else
+    #include <experimental/optional>
+    #ifndef EM_OPTIONAL_COMPAT_DEFINED
+    #define EM_OPTIONAL_COMPAT_DEFINED 1
+namespace std {
+        template<typename T>
+        using optional = experimental::optional<T>;
+
+        constexpr auto nullopt = experimental::nullopt;
+    }
+    #endif
+#endif
 #include <vector>
 #include <utility>
 #include <string>

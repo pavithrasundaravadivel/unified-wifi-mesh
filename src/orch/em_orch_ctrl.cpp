@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <vector>
+#include <algorithm>
 #include "em_base.h"
 #include "em_cmd.h"
 #include "em_cmd_exec.h"

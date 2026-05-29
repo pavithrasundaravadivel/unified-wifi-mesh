@@ -22,6 +22,7 @@
 
 #include "em_base.h"
 #include "dm_easy_mesh.h"
+#include "collection.h"
 
 class em_mgr_t;
 

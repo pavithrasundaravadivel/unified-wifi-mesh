@@ -5,13 +5,14 @@
 #include "util.h"
 
 #include <memory>
+constexpr struct ieee80211_vs_ie ec_manager_t::CCE_IE;
 
 ec_manager_t::ec_manager_t(const std::string& al_mac_addr, ec_ops_t& ops, bool is_controller, std::optional<ec_persistent_sec_ctx_t> sec_ctx, handshake_completed_handler cfg_handshake_complete)
     : m_is_controller(is_controller),  m_ops(ops), m_stored_al_mac_addr(al_mac_addr), m_handshake_complete(cfg_handshake_complete) {
 
     printf("EC Manager created with MAC: %s\n", al_mac_addr.c_str());  
     if (m_is_controller) {
-        if (!sec_ctx.has_value()) {
+        if (!sec_ctx) {
             em_printfout("Security context is required for the controller configurator");
             throw std::runtime_error("Security context is required for the controller configurator");
         }

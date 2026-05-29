@@ -141,7 +141,8 @@ onewifi_em_ctrl_SOURCES =  \
      $(top_srcdir)/src/orch/em_orch_ctrl.cpp \
      $(top_srcdir)/src/util_crypto/aes_siv.c \
      $(top_srcdir)/src/utils/util.cpp \
-     $(top_srcdir)/src/utils/timer.cpp
+     $(top_srcdir)/src/utils/timer.cpp \
+     $(top_srcdir)/src/utils/collection.c
  
  
 onewifi_em_ctrl_LDFLAGS = -lm -lpthread -ldl -luuid -lcjson -lssl -lcrypto -lrbus -lmariadb
@@ -227,6 +228,7 @@ onewifi_em_ctrl_test_SOURCES = $(onewifi_em_ctrl_SOURCES) \
 	$(top_srcdir)/tests/test_l1_em_msg.cpp \
 	$(top_srcdir)/tests/test_l1_timer.cpp \
 	$(top_srcdir)/tests/test_l1_util.cpp \
+	$(top_srcdir)/tests/test_l1_collection.c \
 	$(top_srcdir)/src/dm/dm_neighbor.cpp \
 	$(top_srcdir)/tests/test_l1_dm_neighbor.cpp \
 	$(top_srcdir)/tests/test_l1_ec_1905_encrypt_layer.cpp \

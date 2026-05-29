@@ -32,6 +32,8 @@
 #include "util.h"
 #include "dm_easy_mesh_ctrl.h"
 #include "em_ctrl.h"
+#include <ccsp/bus_common.h>
+#include <ccsp/bus.h>
 
 //todo: test code remove after node sync is implemented
 mac_addr_str_t g_temp_node_mac = {0};

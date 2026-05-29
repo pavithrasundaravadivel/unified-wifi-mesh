@@ -10,6 +10,73 @@
 #include <openssl/kdf.h>
 #endif
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#include <algorithm>
+#include <openssl/ec.h>
+#include <openssl/bn.h>
+#include <openssl/obj_mac.h>
+#endif
+static int ec_point_get_affine(const EC_GROUP *group,
+                               const EC_POINT *p,
+                               BIGNUM *x, BIGNUM *y,
+                               BN_CTX *ctx)
+{
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    int field = EC_METHOD_get_field_type(EC_GROUP_method_of(group));
+
+    if (field == NID_X9_62_prime_field)
+        return EC_POINT_get_affine_coordinates_GFp(group, p, x, y, ctx);
+    else
+        return EC_POINT_get_affine_coordinates_GF2m(group, p, x, y, ctx);
+#else
+    return EC_POINT_get_affine_coordinates(group, p, x, y, ctx);
+#endif
+}
+
+static inline int ec_group_get_curve_compat(const EC_GROUP *group,
+                                            BIGNUM *p, BIGNUM *a, BIGNUM *b,
+                                            BN_CTX *ctx)
+{
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    // OpenSSL 1.0.x: use GFp/GF2m APIs [2](https://docs.openssl.org/master/man3/EC_GROUP_new/)[1](https://docs.rs/openssl/latest/openssl/ec/struct.EcGroup.html)
+    int field = EC_METHOD_get_field_type(EC_GROUP_method_of(group));
+    if (field == NID_X9_62_prime_field)
+        return EC_GROUP_get_curve_GFp(group, p, a, b, ctx);
+    else
+        return EC_GROUP_get_curve_GF2m(group, p, a, b, ctx);
+#else
+    return EC_GROUP_get_curve(group, p, a, b, ctx);
+#endif
+}
+
+#include <openssl/ec.h>
+#include <openssl/bn.h>
+
+static inline int ec_point_get_affine_compat(const EC_GROUP *group,
+                                            const EC_POINT *p,
+                                            BIGNUM *x, BIGNUM *y,
+                                            BN_CTX *ctx)
+{
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    return EC_POINT_get_affine_coordinates_GFp(group, p, x, y, ctx);
+#else
+    return EC_POINT_get_affine_coordinates(group, p, x, y, ctx);
+#endif
+}
+
+static inline int ec_point_set_affine_compat(const EC_GROUP *group,
+                                             EC_POINT *p,
+                                             const BIGNUM *x,
+                                             const BIGNUM *y,
+                                             BN_CTX *ctx)
+{
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    return EC_POINT_set_affine_coordinates_GFp(group, p, x, y, ctx);
+#else
+    return EC_POINT_set_affine_coordinates(group, p, x, y, ctx);
+#endif
+}
+    
 uint8_t* ec_crypto::compute_key_hash(const SSL_KEY *key, const char *prefix)
 {
     BIO *bio;
@@ -135,7 +202,7 @@ BIGNUM* ec_crypto::calculate_Lx(ec_connection_context_t& c_ctx, const BIGNUM* bR
     if (!EC_POINT_mul(c_ctx.group, L, NULL, BI, sum, c_ctx.bn_ctx))
         goto cleanup;
     
-    if (EC_POINT_get_affine_coordinates(c_ctx.group, L, L_x, NULL, c_ctx.bn_ctx) == 0)
+    if (ec_point_get_affine(c_ctx.group, L, L_x, NULL, c_ctx.bn_ctx) == 0)
     success = 1;
     
 cleanup:
@@ -478,7 +545,7 @@ void ec_crypto::print_ec_point (const EC_GROUP *group, BN_CTX *bnctx, EC_POINT *
         return;
     }
 
-    if (EC_POINT_get_affine_coordinates(group, point, x, y, bnctx) == 0) {
+    if (ec_point_get_affine_compat(group, point, x, y, bnctx) == 0) {
         BN_free(y);
         BN_free(x);
         printf("%s:%d:Could not print ec_point\n", __func__, __LINE__);
@@ -577,7 +644,7 @@ bool ec_crypto::init_connection_ctx(ec_connection_context_t& c_ctx, const SSL_KE
     c_ctx.nonce_len = static_cast<uint16_t>(c_ctx.digest_len*4);
 
     // Fetch prime
-    if (EC_GROUP_get_curve(c_ctx.group, c_ctx.prime, NULL, NULL, c_ctx.bn_ctx) == 0) {
+    if (ec_group_get_curve_compat(c_ctx.group, c_ctx.prime, NULL, NULL, c_ctx.bn_ctx) == 0) {
         em_printfout("unable to get x, y of the curve");
         BN_free(c_ctx.order);
         BN_free(c_ctx.prime);
@@ -611,7 +678,7 @@ scoped_buff ec_crypto::encode_ec_point(const EC_GROUP* group, const EC_POINT *po
     scoped_bn x(BN_new());
     scoped_bn y(BN_new());
 
-    if (EC_POINT_get_affine_coordinates(group, point, x.get(), y.get(), bn_ctx) == 0) {
+    if (ec_point_get_affine_compat(group, point, x.get(), y.get(), bn_ctx) == 0) {
         em_printfout("unable to get x, y of the curve");
         return nullptr;
     }
@@ -620,7 +687,7 @@ scoped_buff ec_crypto::encode_ec_point(const EC_GROUP* group, const EC_POINT *po
     bool is_prime_fetched = false;
     if (prime_bn == NULL) {
         prime_bn = BN_new();
-        if (EC_GROUP_get_curve(group, prime_bn, NULL, NULL, bn_ctx) == 0) {
+        if (ec_group_get_curve_compat(group, prime_bn, NULL, NULL, bn_ctx) == 0) {
             em_printfout("unable to get prime of the curve");
             BN_free(prime_bn);
             return nullptr;
@@ -662,7 +729,7 @@ EC_POINT *ec_crypto::decode_ec_point(const EC_GROUP* group, const uint8_t *key_b
 
     scoped_bn prime(BN_new());
     EM_ASSERT_NOT_NULL(prime.get(), NULL, "Failed to create BIGNUM for prime");
-    if (EC_GROUP_get_curve(group, prime.get(), NULL, NULL, NULL) == 0) {
+    if (ec_group_get_curve_compat(group, prime.get(), NULL, NULL, NULL) == 0) {
         em_printfout("unable to get prime of the curve");
         return NULL;
     }
@@ -682,7 +749,7 @@ EC_POINT *ec_crypto::decode_ec_point(const EC_GROUP* group, const uint8_t *key_b
         goto err;
     }
 
-    if (EC_POINT_set_affine_coordinates(group, point, x, y, bn_ctx) == 0) {
+    if (ec_point_set_affine_compat(group, point, x, y, bn_ctx) == 0) {
         em_printfout("unable to set coordinates for the point");
         goto err;
     }
@@ -742,7 +809,7 @@ std::optional<std::tuple<cJSON*, cJSON*, std::vector<uint8_t>>> ec_crypto::split
     bool did_succeed = true;
 
     auto sig = em_crypto_t::base64url_decode(parts[2]);
-    if (!sig.has_value()){
+    if (!sig){
         em_printfout("Connector signature could not be decoded!");
         return std::nullopt;
     }
@@ -750,7 +817,7 @@ std::optional<std::tuple<cJSON*, cJSON*, std::vector<uint8_t>>> ec_crypto::split
     // Remove signature from parts
     parts.pop_back();
 
-    if (signing_key.has_value()){
+    if (signing_key){
         std::string signed_msg = parts[0] + "." + parts[1];
         std::vector<uint8_t> signed_bytes(signed_msg.begin(), signed_msg.end());
 
@@ -979,7 +1046,12 @@ std::vector<uint8_t> ec_crypto::concat_nonces(const std::vector<std::vector<uint
 
 EC_POINT *ec_crypto::decode_jwk_ec_point(cJSON *json_web_key, BN_CTX* bn_ctx)
 {
-    auto [group, point] = ec_crypto::decode_jwk(json_web_key, bn_ctx);
+    
+    auto tmp = ec_crypto::decode_jwk(json_web_key, bn_ctx);
+
+    auto group = tmp.first;
+    auto point = tmp.second;
+
     if (group == nullptr || point == nullptr) {
         return nullptr;
     }
@@ -1022,7 +1094,7 @@ std::pair<EC_GROUP*, EC_POINT*> ec_crypto::decode_jwk(cJSON *json_web_key, BN_CT
 
     scoped_ec_point point(EC_POINT_new(curv_group.get()));
 
-    if (EC_POINT_set_affine_coordinates(curv_group.get(), point.get(), bn_x.get(), bn_y.get(), bn_ctx) == 0) {
+    if (ec_point_set_affine_compat(curv_group.get(), point.get(), bn_x.get(), bn_y.get(), bn_ctx) == 0) {
         em_printfout("Failed to set affine coordinates for JWK point");
         return {};
     }
@@ -1062,7 +1134,7 @@ std::optional<std::string> ec_crypto::generate_connector(const cJSON * jws_heade
     std::string sig_data = base64_jws_header + "." + base64_jws_payload;
     std::vector<uint8_t> sig_data_vec(sig_data.begin(), sig_data.end());
     std::optional<std::vector<uint8_t>> signature = em_crypto_t::sign_data_ecdsa(sig_data_vec, sign_key);
-    if (!signature.has_value()) {
+    if (!signature) {
         em_printfout("Failed to sign data");
         return std::nullopt;
     }
@@ -1113,7 +1185,9 @@ cJSON* ec_crypto::create_jws_payload(const std::vector<std::unordered_map<std::s
 
     for (const auto& group : groups) {  
         cJSON* groupObj = cJSON_CreateObject();
-        for (const auto& [key, val] : group) {
+        for (const auto& kv : group) {
+            auto key = kv.first;
+            auto val = kv.second;
             cJSON_AddStringToObject(groupObj, key.c_str(), val.c_str());  
         }
 
@@ -1128,10 +1202,10 @@ cJSON* ec_crypto::create_jws_payload(const std::vector<std::unordered_map<std::s
     }
     cJSON_AddItemToObject(jwsPayloadObj, "netAccessKey", netAccessKeyObj);
 
-    if (expiry.has_value()) {
+    if (expiry) {
         cJSON_AddStringToObject(jwsPayloadObj, "expiry", expiry.value().c_str());
     }
-    if (version.has_value()) {
+    if (version) {
         cJSON_AddNumberToObject(jwsPayloadObj, "version", version.value());
     }
     return jwsPayloadObj;
@@ -1189,7 +1263,9 @@ bool ec_crypto::add_common_jwk_fields(cJSON *json_obj, const EC_GROUP* key_group
     EM_ASSERT_NOT_NULL(key_group, false, "Key group is NULL");
     EM_ASSERT_NOT_NULL(key_point, false, "Key point is NULL");
 
-    auto [x, y] = ec_crypto::get_ec_x_y(key_group, key_point);
+    auto tmp = ec_crypto::get_ec_x_y(key_group, key_point);
+    auto x = tmp.first;
+    auto y = tmp.second;
     if (x == NULL || y == NULL) {
         if (x) BN_free(x);
         if (y) BN_free(y);

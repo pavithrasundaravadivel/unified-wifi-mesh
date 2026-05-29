@@ -55,7 +55,12 @@ bool ec_1905_encrypt_layer_t::handle_peer_disc_req_frame(ec_frame_t *frame, uint
     */
 
     auto send_peer_disc_response = [&](ec_status_code_t status) {
-        auto [resp_frame, resp_len] = create_peer_disc_resp(src_mac, status, trans_id);
+
+auto tmp = create_peer_disc_resp(src_mac, status, trans_id);
+
+auto resp_frame = tmp.first;
+auto resp_len = tmp.second;
+        
         bool sent = m_send_dir_encap_dpp_msg(resp_frame, resp_len, src_mac);
         free(resp_frame);
         return sent;
@@ -76,12 +81,18 @@ bool ec_1905_encrypt_layer_t::handle_peer_disc_req_frame(ec_frame_t *frame, uint
 
     // Checks JSON decoding and signature verification
     auto conn_parts = ec_crypto::split_decode_connector(recv_1905_connector_str.c_str(), m_C_signing_key);
-    if (!conn_parts.has_value()) {
+    if (!conn_parts) {
         em_printfout("Failed to decode E-1905 Connector or verify signature");
         return send_peer_disc_response(DPP_STATUS_INVALID_CONNECTOR);
     }
 
-    auto [header, payload, sig] = *conn_parts;
+
+auto tmp = *conn_parts;
+
+auto header = std::get<0>(tmp);
+auto payload = std::get<1>(tmp);
+auto sig = std::get<2>(tmp);
+
     (void)sig;
 
     if (!ec_crypto::validate_jws_header(header, "dppCon")) {
@@ -109,7 +120,7 @@ bool ec_1905_encrypt_layer_t::handle_peer_disc_req_frame(ec_frame_t *frame, uint
         if the version member in Connector B has value 3 or higher and the Protocol Version field is not present or
         has a different value than the one in the version member in Connector B ,
         */
-        if (!version_attr.has_value()){
+        if (!version_attr){
             return send_peer_disc_response(DPP_STATUS_NO_MATCH);
         }
         if (version->valueint != static_cast<int>(version_attr->data[0])) {
@@ -140,7 +151,9 @@ bool ec_1905_encrypt_layer_t::handle_peer_disc_req_frame(ec_frame_t *frame, uint
     Derives a PMK and PMKID by using its private key and the new Peer’s public key.
     */
 
-    auto [pmk, pmkid] = compute_pmk_pmkid(payload);
+    auto tmp1 = compute_pmk_pmkid(payload);
+    auto pmk = tmp1.first;
+    auto pmkid = tmp1.second;
     if (pmk.empty() || pmkid.empty()) {
         em_printfout("Failed to compute PMK or PMKID from Recieved 1905 Connector");
         return false;
@@ -244,7 +257,13 @@ bool ec_1905_encrypt_layer_t::handle_peer_disc_resp_frame(ec_frame_t *frame, uin
     auto parts = ec_crypto::split_decode_connector(connector_1905_str.c_str(), m_C_signing_key);
     EM_ASSERT_OPT_HAS_VALUE(parts, false, "Failed to decode recieved 1905 Connector or verify signature");
 
-    auto [header, payload, sig] = *parts;
+    
+auto tmp = *parts;
+
+auto header = std::get<0>(tmp);
+auto payload = std::get<1>(tmp);
+auto sig = std::get<2>(tmp);
+
     (void)sig;
 
     if (!ec_crypto::validate_jws_header(header, "dppCon")){
@@ -265,7 +284,7 @@ bool ec_1905_encrypt_layer_t::handle_peer_disc_resp_frame(ec_frame_t *frame, uin
         if the version member in Connector B has value 3 or higher and the Protocol Version field is not present or
         has a different value than the one in the version member in Connector B ,
         */
-        if (!version_attr.has_value()) return false;
+        if (!version_attr) return false;
         if (version->valueint != static_cast<int>(version_attr->data[0])) {
             em_printfout("Mismatched Protocol Version in Peer Discovery Request frame, expected %d, got %d", version->valueint, static_cast<int>(version_attr->data[0]));
             return false;
@@ -281,7 +300,9 @@ bool ec_1905_encrypt_layer_t::handle_peer_disc_resp_frame(ec_frame_t *frame, uin
     At this point, each Peer derives the PMK and PMKID using its private key 
     and the other Peer’s public key from the Connector.
     */
-    auto [pmk, pmkid] = compute_pmk_pmkid(payload);
+    auto tmp1 = compute_pmk_pmkid(payload);
+    auto pmk = tmp1.first;
+    auto pmkid = tmp1.second;
     if (pmk.empty() || pmkid.empty()) {
         em_printfout("Failed to compute PMK or PMKID from Recieved 1905 Connector");
         return false;
@@ -389,7 +410,9 @@ bool ec_1905_encrypt_layer_t::start_secure_1905_layer(uint8_t dest_al_mac[ETH_AL
     em_printfout("Starting to secure 1905 layer for '" MACSTRFMT "'", MAC2STR(dest_al_mac));
 
 
-    auto [disc_req_frame, disc_req_len] = create_peer_disc_req(dest_al_mac);
+    auto tmp1 = create_peer_disc_req(dest_al_mac);
+    auto disc_req_frame = tmp1.first;
+    auto disc_req_len = tmp1.second;
     if (disc_req_frame == NULL || disc_req_len == 0){
         em_printfout("Could not secure 1905 layer, failed to create peer discovery request");
         return false;
@@ -433,7 +456,9 @@ bool ec_1905_encrypt_layer_t::rekey_1905_layer_ptk()
     every Multi-AP device it is communicating with.
     */
 
-    for (auto& [mac_str, ctx] : m_1905_mac_key_mac) {
+    for (auto& str : m_1905_mac_key_mac) {
+        auto mac_str = str.first;
+        auto ctx = str.second;
 
         if (memcmp(ctx.pmk, empty_nonce, sizeof(ctx.pmk)) == 0) {
             em_printfout("Cannot rekey 1905 layer PTK with '%s', PMK is not set", mac_str.c_str());
@@ -467,10 +492,14 @@ bool ec_1905_encrypt_layer_t::rekey_1905_layer_gtk()
     m_gtk_rekey_counter++;
 
     // Send GTK to all agents
-    for (auto& [mac_str, ctx] : m_1905_mac_key_mac) {
+    for (auto& str : m_1905_mac_key_mac) {
+auto mac_str = str.first;
+auto ctx = str.second;
 
         // Build and send the first frame of the group key handshake
-        auto [eapol_frame, frame_len] = build_group_eapol_frame_1(ctx);
+        auto tmp = build_group_eapol_frame_1(ctx);
+        auto eapol_frame = tmp.first;
+        auto frame_len = tmp.second;
         if (eapol_frame == nullptr || frame_len == 0) {
             em_printfout("Failed to build EAPOL frame for group key handshake with Agent '%s'", mac_str.c_str());
             return false;
@@ -501,7 +530,10 @@ bool ec_1905_encrypt_layer_t::set_sec_params(SSL_KEY *c_sign_key, SSL_KEY* net_a
     // Validate 1905 Connector before attempting to use it for 1905 layer
     auto parts = ec_crypto::split_decode_connector(connector_1905.c_str(), c_sign_key);
     EM_ASSERT_OPT_HAS_VALUE(parts, false, "Could not set 1905 encryption layer security params, failed to decode 1905 connector or verify signature");
-    auto [header, payload, sig] = *parts;
+    auto tmp = *parts;
+    auto header = std::get<0>(tmp);
+    auto payload = std::get<1>(tmp);
+    auto sig = std::get<2>(tmp);
     if (!ec_crypto::validate_jws_header(header, "dppCon")) {
         em_printfout("Could not set 1905 encryption layer security params, invalid JWS header in 1905 Connector");
         return false;
@@ -576,7 +608,9 @@ bool ec_1905_encrypt_layer_t::begin_1905_4way_handshake(uint8_t dest_al_mac[ETH_
 
     ctx.is_ptk_rekeying = do_rekey; 
 
-    auto [eapol_frame, frame_len] = build_pw_eapol_frame_1(ctx);
+    auto tmp = build_pw_eapol_frame_1(ctx);
+    auto eapol_frame = tmp.first;
+    auto frame_len = tmp.second;
     if (eapol_frame == nullptr || frame_len == 0) {
         em_printfout("Failed to build EAPOL frame 1 for 1905 4-way handshake with '%s'", dest_mac_str.c_str());
         return false;
@@ -624,7 +658,9 @@ std::pair<std::vector<uint8_t>,std::vector<uint8_t>> ec_1905_encrypt_layer_t::co
     EM_ASSERT_NOT_NULL(net_access_key, {}, "No netAccessKey in received 1905 Connector");
 
     // Public key of the peer's Net Access Key (P_K)
-    auto [group_raw, PK_raw] = ec_crypto::decode_jwk(net_access_key);
+    auto tmp = ec_crypto::decode_jwk(net_access_key);
+    auto group_raw = tmp.first;
+    auto PK_raw = tmp.second;
     EM_ASSERT_NOT_NULL(group_raw, {}, "Failed to decode group from received Net Access Key");
     EM_ASSERT_NOT_NULL(PK_raw, {}, "Failed to decode public key from received Net Access Key");
 
@@ -633,7 +669,12 @@ std::pair<std::vector<uint8_t>,std::vector<uint8_t>> ec_1905_encrypt_layer_t::co
 
     scoped_bn prime(BN_new());
     EM_ASSERT_NOT_NULL(prime.get(), {}, "Failed to create BIGNUM for prime");
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    if (EC_GROUP_get_curve_GFp(group.get(), prime.get(), NULL, NULL, NULL) == 0) {
+#else
     if (EC_GROUP_get_curve(group.get(), prime.get(), NULL, NULL, NULL) == 0) {
+#endif
         em_printfout("unable to get prime of the curve");
         return {};
     }
@@ -977,7 +1018,9 @@ std::vector<uint8_t> ec_1905_encrypt_layer_t::calculate_mic(ec_1905_key_ctx &ctx
 
 std::pair<uint8_t*, size_t> ec_1905_encrypt_layer_t::build_pw_eapol_frame_1(ec_1905_key_ctx &ctx)
 {
-    auto [eapol_frame, eapol_frame_size] = alloc_eapol_frame(false);
+    auto tmp = alloc_eapol_frame(false);
+    auto eapol_frame = tmp.first;
+    auto eapol_frame_size = tmp.second;
 
     eapol_packet_t* eapol_packet = reinterpret_cast<eapol_packet_t*>(eapol_frame + sizeof(ieee802_1x_hdr_t));
     // Set the key_info field
@@ -1015,7 +1058,9 @@ std::pair<uint8_t*, size_t> ec_1905_encrypt_layer_t::build_pw_eapol_frame_1(ec_1
     kde->data_type = EAPOL_KDE_TYPE_PMKID;
     memcpy(kde->data, ctx.pmkid, sizeof(ctx.pmkid));
 
-    auto [final_eapol_frame, final_eapol_frame_size] = append_key_data_buff(eapol_frame, eapol_frame_size, reinterpret_cast<uint8_t*>(kde), sizeof(eapol_kde_t) + sizeof(ctx.pmkid)); // Append the KDE to the EAPOL packet
+    auto tmp1 = append_key_data_buff(eapol_frame, eapol_frame_size, reinterpret_cast<uint8_t*>(kde), sizeof(eapol_kde_t) + sizeof(ctx.pmkid)); // Append the KDE to the EAPOL packet
+    auto final_eapol_frame = tmp1.first;
+    auto final_eapol_frame_size = tmp1.second;
     free(kde);
     ASSERT_NOT_NULL(final_eapol_frame, {}, "Failed to append KDE to EAPOL frame");
 
@@ -1029,7 +1074,9 @@ std::pair<uint8_t*, size_t> ec_1905_encrypt_layer_t::build_pw_eapol_frame_1(ec_1
 std::pair<uint8_t*, size_t> ec_1905_encrypt_layer_t::build_pw_eapol_frame_2(ec_1905_key_ctx &ctx)
 {
     
-    auto [eapol_frame, eapol_frame_size] = alloc_eapol_frame(true);
+    auto tmp = alloc_eapol_frame(true);
+    auto eapol_frame = tmp.first;
+    auto eapol_frame_size = tmp.second;
 
     eapol_packet_t* eapol_packet = reinterpret_cast<eapol_packet_t*>(eapol_frame + sizeof(ieee802_1x_hdr_t));
     // Set the key_info field
@@ -1084,7 +1131,9 @@ std::pair<uint8_t*, size_t> ec_1905_encrypt_layer_t::build_pw_eapol_frame_2(ec_1
 
 std::pair<uint8_t*, size_t> ec_1905_encrypt_layer_t::build_pw_eapol_frame_3(ec_1905_key_ctx &ctx)
 {
-    auto [eapol_frame, eapol_frame_size] = alloc_eapol_frame(true);
+    auto tmp = alloc_eapol_frame(true);
+    auto eapol_frame = tmp.first;
+    auto eapol_frame_size = tmp.second;
 
     eapol_packet_t* eapol_packet = reinterpret_cast<eapol_packet_t*>(eapol_frame + sizeof(ieee802_1x_hdr_t));
     
@@ -1154,7 +1203,9 @@ std::pair<uint8_t*, size_t> ec_1905_encrypt_layer_t::build_pw_eapol_frame_3(ec_1
 
 
     em_printfout("DEBUG: Encrypting key_data_len=%zu bytes for frame 3", key_data_len);
-    auto [wrapped_key_data, wrapped_key_data_len] = encrypt_key_data(ctx, key_data_plain, key_data_len);
+    auto tmp1 = encrypt_key_data(ctx, key_data_plain, key_data_len);
+    auto wrapped_key_data = tmp1.first;
+    auto wrapped_key_data_len = tmp1.second;
     if (wrapped_key_data == NULL || wrapped_key_data_len == 0) {
         em_printfout("Failed to encrypt Key Data for EAPOL frame 3 in 4-way handshake with '%s'", util::mac_to_string(m_al_mac_addr.data()).c_str());
         free(eapol_frame);
@@ -1163,7 +1214,9 @@ std::pair<uint8_t*, size_t> ec_1905_encrypt_layer_t::build_pw_eapol_frame_3(ec_1
     em_printfout("DEBUG: Wrapped key data length=%zu for frame 3", wrapped_key_data_len);
 
     // Add encrypted Key Data to the EAPOL frame
-    auto [final_eapol_frame, final_eapol_frame_size] = append_key_data_buff(eapol_frame, eapol_frame_size, wrapped_key_data, wrapped_key_data_len, true);
+    auto tmp2 = append_key_data_buff(eapol_frame, eapol_frame_size, wrapped_key_data, wrapped_key_data_len, true);
+    auto final_eapol_frame = tmp2.first;
+    auto final_eapol_frame_size = tmp2.second;
 
     EM_ASSERT_NOT_NULL(final_eapol_frame, {}, "Failed to append encrypted Key Data to EAPOL frame");
 
@@ -1190,7 +1243,9 @@ std::pair<uint8_t*, size_t> ec_1905_encrypt_layer_t::build_pw_eapol_frame_3(ec_1
 
 std::pair<uint8_t*, size_t> ec_1905_encrypt_layer_t::build_pw_eapol_frame_4(ec_1905_key_ctx &ctx)
 {
-    auto [eapol_frame, eapol_frame_size] = alloc_eapol_frame(true);
+    auto tmp = alloc_eapol_frame(true);
+    auto eapol_frame = tmp.first;
+    auto eapol_frame_size = tmp.second;
 
     eapol_packet_t* eapol_packet = reinterpret_cast<eapol_packet_t*>(eapol_frame + sizeof(ieee802_1x_hdr_t));
     // Set the key_info field
@@ -1240,7 +1295,9 @@ std::pair<uint8_t*, size_t> ec_1905_encrypt_layer_t::build_pw_eapol_frame_4(ec_1
 
 std::pair<uint8_t *, size_t> ec_1905_encrypt_layer_t::build_group_eapol_frame_1(ec_1905_key_ctx &ctx)
 {
-    auto [eapol_frame, eapol_frame_size] = alloc_eapol_frame(true);
+    auto tmp = alloc_eapol_frame(true);
+    auto eapol_frame = tmp.first;
+    auto eapol_frame_size = tmp.second;
 
     eapol_packet_t* eapol_packet = reinterpret_cast<eapol_packet_t*>(eapol_frame + sizeof(ieee802_1x_hdr_t));
     // Set the key_info field
@@ -1305,10 +1362,14 @@ std::pair<uint8_t *, size_t> ec_1905_encrypt_layer_t::build_group_eapol_frame_1(
 
     key_data_len = sizeof(eapol_kde_t) + sizeof(gtk_1905_kde_t);
 
-    auto [wrapped_key_data, wrapped_key_data_len] = encrypt_key_data(ctx, key_data_plain, key_data_len);
+    auto tmp1 = encrypt_key_data(ctx, key_data_plain, key_data_len);
+    auto wrapped_key_data = tmp1.first;
+    auto wrapped_key_data_len = tmp1.second;
 
     // Add encrypted Key Data to the EAPOL frame
-    auto [final_eapol_frame, final_eapol_frame_size] = append_key_data_buff(eapol_frame, eapol_frame_size, wrapped_key_data, wrapped_key_data_len, true);
+    auto tmp2 = append_key_data_buff(eapol_frame, eapol_frame_size, wrapped_key_data, wrapped_key_data_len, true);
+    auto final_eapol_frame = tmp2.first;
+    auto final_eapol_frame_size = tmp2.second;
 
     EM_ASSERT_NOT_NULL(final_eapol_frame, {}, "Failed to append encrypted Key Data to EAPOL frame");
 
@@ -1334,7 +1395,9 @@ std::pair<uint8_t *, size_t> ec_1905_encrypt_layer_t::build_group_eapol_frame_1(
 
 std::pair<uint8_t *, size_t> ec_1905_encrypt_layer_t::build_group_eapol_frame_2(ec_1905_key_ctx &ctx)
 {
-    auto [eapol_frame, eapol_frame_size] = alloc_eapol_frame(true);
+    auto tmp = alloc_eapol_frame(true);
+    auto eapol_frame = tmp.first;
+    auto eapol_frame_size = tmp.second;
 
     eapol_packet_t* eapol_packet = reinterpret_cast<eapol_packet_t*>(eapol_frame + sizeof(ieee802_1x_hdr_t));
     // Set the key_info field
@@ -1452,7 +1515,9 @@ bool ec_1905_encrypt_layer_t::handle_pw_eapol_frame_1(ec_1905_key_ctx &ctx, uint
 
     // Build the second frame of the 4-way handshake
     em_printfout("Building EAPOL frame 2 for 4-way handshake with '" MACSTRFMT "'", MAC2STR(src_mac));
-    auto [eapol_frame_2, frame_len] = build_pw_eapol_frame_2(ctx);
+    auto tmp1 = build_pw_eapol_frame_2(ctx);
+    auto eapol_frame_2 = tmp1.first;
+    auto frame_len = tmp1.second;
     if (eapol_frame_2 == nullptr || frame_len == 0) {
         em_printfout("Failed to build EAPOL frame 2 for 4-way handshake with '" MACSTRFMT "'", MAC2STR(src_mac));
         return false;
@@ -1532,7 +1597,12 @@ bool ec_1905_encrypt_layer_t::handle_pw_eapol_frame_2(ec_1905_key_ctx &ctx, uint
 
     // Build the third frame of the 4-way handshake
     em_printfout("Building EAPOL frame 3 for 4-way handshake with '" MACSTRFMT "'", MAC2STR(src_mac));
-    auto [eapol_frame_3, frame_len] = build_pw_eapol_frame_3(ctx);
+
+auto tmp = build_pw_eapol_frame_3(ctx);
+
+auto eapol_frame_3 = tmp.first;
+auto frame_len = tmp.second;
+
     if (eapol_frame_3 == nullptr || frame_len == 0) {
         em_printfout("Failed to build EAPOL frame 3 for 4-way handshake with '" MACSTRFMT "'", MAC2STR(src_mac));
         return false;
@@ -1611,7 +1681,9 @@ bool ec_1905_encrypt_layer_t::handle_pw_eapol_frame_3(ec_1905_key_ctx &ctx, uint
         return false;
     }
     
-    auto [unwrapped_key_data, unwrapped_key_data_len] = decrypt_key_data(ctx, wrapped_data, wrapped_len);
+    auto tmp = decrypt_key_data(ctx, wrapped_data, wrapped_len);
+    auto unwrapped_key_data = tmp.first;
+    auto unwrapped_key_data_len = tmp.second;
     if (unwrapped_key_data == nullptr || unwrapped_key_data_len == 0) {
         em_printfout("Failed to decrypt Key Data for EAPOL frame 3 in 4-way handshake with '" MACSTRFMT "'", MAC2STR(src_mac));
         return false;
@@ -1635,7 +1707,9 @@ bool ec_1905_encrypt_layer_t::handle_pw_eapol_frame_3(ec_1905_key_ctx &ctx, uint
 
     // Build and send the fourth frame of the 4-way handshake
     em_printfout("Building EAPOL frame 4 for 4-way handshake with '" MACSTRFMT "'", MAC2STR(src_mac));
-    auto [eapol_frame_4, frame_len] = build_pw_eapol_frame_4(ctx);
+    auto tmp1 = build_pw_eapol_frame_4(ctx);
+    auto eapol_frame_4 = tmp1.first;
+    auto frame_len = tmp1.second;
     if (eapol_frame_4 == nullptr || frame_len == 0) {
         em_printfout("Failed to build EAPOL frame 4 for 4-way handshake with '" MACSTRFMT "'", MAC2STR(src_mac));
         return false;
@@ -1780,7 +1854,9 @@ bool ec_1905_encrypt_layer_t::handle_group_eapol_frame_1(ec_1905_key_ctx &ctx, u
         return false;
     }
 
-    auto [unwrapped_key_data, unwrapped_len] = decrypt_key_data(ctx, wrapped_data, wrapped_len);
+    auto tmp1 = decrypt_key_data(ctx, wrapped_data, wrapped_len);
+    auto unwrapped_key_data = tmp1.first;
+    auto unwrapped_len = tmp1.second;
     if (unwrapped_key_data == nullptr || unwrapped_len == 0) {
         em_printfout("Failed to decrypt key data in EAPOL frame 1 in group key handshake with '" MACSTRFMT "'", MAC2STR(src_mac));
         return false;
@@ -1814,7 +1890,9 @@ bool ec_1905_encrypt_layer_t::handle_group_eapol_frame_1(ec_1905_key_ctx &ctx, u
     em_printfout("Saved GTK for group key handshake with '" MACSTRFMT "'", MAC2STR(src_mac));
 
     // Build and send the second frame of the group key handshake
-    auto [eapol_frame_2, frame_len] = build_group_eapol_frame_2(ctx);
+    auto tmp = build_group_eapol_frame_2(ctx);
+    auto eapol_frame_2 = tmp.first;
+    auto frame_len = tmp.second;
     if (eapol_frame_2 == nullptr || frame_len == 0) {
         em_printfout("Failed to build EAPOL frame 2 for group key handshake with '" MACSTRFMT "'", MAC2STR(src_mac));
         return false;

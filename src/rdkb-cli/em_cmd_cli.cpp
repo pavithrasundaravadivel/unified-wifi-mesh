@@ -39,6 +39,9 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
 em_cmd_params_t spec_params[] = {
 	{.u = {.args = {0, {"", "", "", "", ""}, "none"}}},
 	{.u = {.args = {2, {"", "", "", "", ""}, "Reset.json"}}},
@@ -462,7 +465,11 @@ int em_cmd_cli_t::execute(char *result)
 
     get_cmd()->init(dm);
 
-	ctx = SSL_CTX_new(TLS_client_method());
+        #if OPENSSL_VERSION_NUMBER < 0x10100000L
+            ctx = SSL_CTX_new(SSLv23_client_method());
+        #else
+	    ctx = SSL_CTX_new(TLS_client_method());
+        #endif
     SSL_CTX_use_certificate_file(ctx, EM_CERT_FILE, SSL_FILETYPE_PEM);
  
 	if ((ssl = get_ep_for_dst_svc(ctx, em_service_type_ctrl)) == NULL) {

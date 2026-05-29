@@ -106,6 +106,7 @@ CTRL_SOURCES = $(wildcard $(ONEWIFI_EM_SRC)/em/*.cpp) \
 	$(ONEWIFI_EM_SRC)/orch/em_orch_ctrl.cpp \
 	$(ONEWIFI_EM_SRC)/utils/util.cpp \
 	$(ONEWIFI_EM_SRC)/utils/timer.cpp \
+	$(ONEWIFI_EM_SRC)/utils/collection.c \
 
 CTRL_OBJECTS = $(CTRL_SOURCES:.cpp=.o)
 GENERIC_OBJECTS = $(GENERIC_SOURCES:.c=.o) 

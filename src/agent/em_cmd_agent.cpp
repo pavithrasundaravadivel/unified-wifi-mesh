@@ -42,19 +42,19 @@
 #include "em_cmd_agent.h"
 
 em_cmd_t em_cmd_agent_t::m_client_cmd_spec[] = {
-    em_cmd_t(em_cmd_type_none,em_cmd_params_t{0, {"", "", "", "", ""}, "none", nullptr}),
-    em_cmd_t(em_cmd_type_dev_init,em_cmd_params_t{1, {"", "", "", "", ""}, "wfa-dataelements:Network", nullptr}),
-    em_cmd_t(em_cmd_type_cfg_renew, em_cmd_params_t{1, {"", "", "", "", ""}, "wfa-dataelements:Renew", nullptr}),
-    em_cmd_t(em_cmd_type_vap_config,em_cmd_params_t{1, {"", "", "", "", ""}, "wfa-dataelements:BssConfig", nullptr}),
-    em_cmd_t(em_cmd_type_sta_list,em_cmd_params_t{1, {"", "", "", "", ""}, "wfa-dataelements:StaList", nullptr}),
-    em_cmd_t(em_cmd_type_ap_cap_query,em_cmd_params_t{1, {"", "", "", "", ""}, "wfa-dataelements:CapReport", nullptr}),
-    em_cmd_t(em_cmd_type_max,em_cmd_params_t{0, {"", "", "", "", ""}, "max", nullptr}),
+    em_cmd_t(em_cmd_type_none,em_cmd_params_t{0, {"", "", "", "", ""}, "none"}),
+    em_cmd_t(em_cmd_type_dev_init,em_cmd_params_t{1, {"", "", "", "", ""}, "wfa-dataelements:Network"}),
+    em_cmd_t(em_cmd_type_cfg_renew, em_cmd_params_t{1, {"", "", "", "", ""}, "wfa-dataelements:Renew"}),
+    em_cmd_t(em_cmd_type_vap_config,em_cmd_params_t{1, {"", "", "", "", ""}, "wfa-dataelements:BssConfig"}),
+    em_cmd_t(em_cmd_type_sta_list,em_cmd_params_t{1, {"", "", "", "", ""}, "wfa-dataelements:StaList"}),
+    em_cmd_t(em_cmd_type_ap_cap_query,em_cmd_params_t{1, {"", "", "", "", ""}, "wfa-dataelements:CapReport"}),
+    em_cmd_t(em_cmd_type_max,em_cmd_params_t{0, {"", "", "", "", ""}, "max"}),
 };
 
 int em_cmd_agent_t::execute(em_long_string_t result)
 {
-    int ret, lsock;
-    unsigned int sz = EM_MAX_EVENT_DATA_LEN;
+    int ret, lsock, dsock;
+    unsigned int sz = EM_MAX_EVENT_DATA_LEN, i, offset, iter;
     unsigned char *tmp;
 
     m_cmd.reset();
@@ -81,7 +81,7 @@ int em_cmd_agent_t::execute(em_long_string_t result)
 
         printf("%s:%d: Connection accepted from client\n", __func__, __LINE__);
 
-        tmp = reinterpret_cast<unsigned char *>(get_event());
+        tmp = (unsigned char *)get_event();
 
         if ((ret = recv(m_dsock, tmp, sizeof(em_event_t) + EM_MAX_EVENT_DATA_LEN, 0)) <= 0) {
             printf("%s:%d: listen error on socket, err:%d\n", __func__, __LINE__, errno);
@@ -113,7 +113,7 @@ int em_cmd_agent_t::send_result(em_cmd_out_status_t status)
     em_status_string_t str;
     unsigned char *tmp;
 
-    tmp = reinterpret_cast<unsigned char *>(m_cmd.status_to_string(status, str));
+    tmp = (unsigned char *)m_cmd.status_to_string(status, str);
 
     if ((ret = send(m_dsock, tmp, sizeof(em_status_string_t), 0)) <= 0) {
         printf("%s:%d: write error on socket, err:%d\n", __func__, __LINE__, errno);
@@ -129,7 +129,7 @@ em_event_t *em_cmd_agent_t::create_event(char *buff)
     // here is the entry point of RBUS subdocuments
     em_cmd_type_t   type = em_cmd_type_none;
     cJSON *obj, *child_obj;
-    const char *tmp;
+    char *tmp;
     em_cmd_t    *cmd;
     unsigned int idx;
     em_event_t *evt;
@@ -151,7 +151,7 @@ em_event_t *em_cmd_agent_t::create_event(char *buff)
             type = em_cmd_agent_t::m_client_cmd_spec[idx].get_type(); continue;
         }
 
-        tmp = cmd->get_arg();
+        tmp = (char *)cmd->get_arg();
 
         if ((child_obj = cJSON_GetObjectItem(obj, tmp)) != NULL) {
             break;
@@ -169,8 +169,7 @@ em_event_t *em_cmd_agent_t::create_event(char *buff)
         return NULL;
     }
 
-    unsigned int buff_len = static_cast<unsigned int>(strlen(buff)) + 1;
-    evt = reinterpret_cast<em_event_t *>(malloc(sizeof(em_event_t) + buff_len));
+    evt = (em_event_t *)malloc(sizeof(em_event_t));
     evt->type = em_event_type_bus;
     bevt = &evt->u.bevt;
 
@@ -200,22 +199,22 @@ em_event_t *em_cmd_agent_t::create_event(char *buff)
     }
 
     memcpy(&bevt->params, &cmd->m_param, sizeof(em_cmd_params_t));
-    memcpy(&bevt->u.subdoc.buff, buff, buff_len);
-    bevt->data_len = buff_len;
+    memcpy(&bevt->u.subdoc.buff, buff, EM_MAX_EVENT_DATA_LEN);
+    bevt->data_len = strlen(buff) + 1;   
     return evt;
 }
 
-em_cmd_agent_t::em_cmd_agent_t(em_cmd_t& obj) : m_dsock(-1)
+em_cmd_agent_t::em_cmd_agent_t(em_cmd_t& obj)
 {
     memcpy(&m_cmd.m_param, &obj.m_param, sizeof(em_cmd_params_t));
 }
 
-em_cmd_agent_t::em_cmd_agent_t(em_cmd_type_t type) : m_dsock(-1)
+em_cmd_agent_t::em_cmd_agent_t(em_cmd_type_t type)
 {
     memcpy(&m_cmd.m_param, &em_cmd_agent_t::m_client_cmd_spec[type].m_param, sizeof(em_cmd_params_t));
 }
 
-em_cmd_agent_t::em_cmd_agent_t() : m_dsock(-1)
+em_cmd_agent_t::em_cmd_agent_t()
 {
 
 }

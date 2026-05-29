@@ -8,10 +8,63 @@
 #include <utility>
 #include <memory>
 #include <vector>
-#include <optional>
+
+#if __cplusplus < 201703L
+  #include <openssl/ec.h>
+  #include <openssl/bn.h>
+static inline int uwm_ec_point_get_affine(const EC_GROUP *group,
+                                         const EC_POINT *p,
+                                         BIGNUM *x, BIGNUM *y,
+                                         BN_CTX *ctx)
+{
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    int field = EC_METHOD_get_field_type(EC_GROUP_method_of(group));
+    if (field == NID_X9_62_prime_field) {
+        return EC_POINT_get_affine_coordinates_GFp(group, p, x, y, ctx);
+    } else {
+        return EC_POINT_get_affine_coordinates_GF2m(group, p, x, y, ctx);
+    }
+#else
+    return EC_POINT_get_affine_coordinates(group, p, x, y, ctx);
+#endif
+}
+#endif
+
+
+#if defined(__GNUC__) && (__GNUC__ < 7)
+
+  #include <experimental/optional>
+
+  #ifndef EM_OPTIONAL_COMPAT_DEFINED
+  #define EM_OPTIONAL_COMPAT_DEFINED 1
+
+  namespace std {
+    template <class T>
+    using optional = ::std::experimental::optional<T>;
+
+    using ::std::experimental::nullopt_t;
+    using ::std::experimental::nullopt;
+  }
+  #endif
+
+#else
+  #include <optional>
+#endif
+
 #include <string>
 #include <cstring>
 #include <unordered_map>
+
+
+#include <openssl/obj_mac.h>
+
+#ifndef NID_X25519
+#define NID_X25519 1034
+#endif
+
+#ifndef NID_X448
+#define NID_X448 1035
+#endif
 
 // forward decl
 struct cJSON;
@@ -223,7 +276,7 @@ public:
 		if (!group) return {};
 
         BIGNUM *x = BN_new(), *y = BN_new();
-        if (EC_POINT_get_affine_coordinates(group, point,
+        if (uwm_ec_point_get_affine(group, point,
             x, y, bn_ctx) == 0) {
             printf("%s:%d unable to get x, y of the curve\n", __func__, __LINE__);
             BN_free(x);
@@ -247,7 +300,9 @@ public:
 	 * @note The Y coordinate is freed after extraction.
 	 */
 	static inline BIGNUM* get_ec_x(const EC_GROUP* group, const EC_POINT *point, BN_CTX *bn_ctx = NULL) {
-        auto [x, y] = get_ec_x_y(group, point, bn_ctx);
+        auto xy = get_ec_x_y(group, point, bn_ctx);
+	BIGNUM *x = xy.first;
+	BIGNUM *y = xy.second;
         BN_free(y);
         return x;
     }
@@ -266,7 +321,9 @@ public:
 	 * @note The caller is responsible for managing the memory of the returned BIGNUM and The X coordinate is freed after extraction.
 	 */
 	static inline BIGNUM* get_ec_y(const EC_GROUP* group, const EC_POINT *point, BN_CTX *bn_ctx = NULL) {
-        auto [x, y] = get_ec_x_y(group, point, bn_ctx);
+        auto xy = get_ec_x_y(group, point, bn_ctx);
+	BIGNUM *x = xy.first;
+	BIGNUM *y = xy.second;
         BN_free(x);
         return y;
     }
@@ -945,7 +1002,7 @@ public:
 	 */
 	static inline std::optional<cJSON*> get_jws_header(const char* conn, std::optional<SSL_KEY*> signing_key = std::nullopt) {
         auto parts = split_decode_connector(conn, signing_key);
-        if (!parts.has_value()) return std::nullopt;
+        if (!parts) return std::nullopt;
         return std::get<0>(parts.value()); // JWS header is the first part
     }
 
@@ -964,7 +1021,7 @@ public:
 	 */
 	static inline std::optional<cJSON*> get_jws_payload(const char* conn, std::optional<SSL_KEY*> signing_key = std::nullopt) {
         auto parts = split_decode_connector(conn, signing_key);
-        if (!parts.has_value()) return std::nullopt;
+        if (!parts) return std::nullopt;
         return std::get<1>(parts.value()); // JWS payload is the second part
     }
 
@@ -982,7 +1039,7 @@ public:
 	 */
 	static inline std::optional<std::vector<uint8_t>> get_jws_signature(const char* conn) {
         auto parts = split_decode_connector(conn);
-        if (!parts.has_value()) return std::nullopt;
+        if (!parts) return std::nullopt;
         return std::get<2>(parts.value()); // JWS signature is the third part
     }
 

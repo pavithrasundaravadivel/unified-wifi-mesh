@@ -19,6 +19,7 @@
 #ifndef DM_EM_CTRL_H
 #define DM_EM_CTRL_H
 
+#include <ccsp/bus_common.h>
 #include "em_base.h"
 #include "dm_network_list.h"
 #include "dm_device_list.h"

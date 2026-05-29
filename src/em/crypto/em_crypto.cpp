@@ -61,6 +61,23 @@
 #include <openssl/provider.h>
 #endif
 
+static inline EVP_MD_CTX* evp_md_ctx_new_compat()
+{
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    return EVP_MD_CTX_create();
+#else
+    return evp_md_ctx_new_compat();
+#endif
+}
+
+static inline void evp_md_ctx_free_compat(EVP_MD_CTX *ctx)
+{
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    EVP_MD_CTX_destroy(ctx);
+#else
+    evp_md_ctx_free_compat(ctx);
+#endif
+}
 // Initialize the static member variables
 // From RFC 3526
 uint8_t em_crypto_t::g_dh1536_p[] =  {
@@ -86,6 +103,7 @@ uint8_t em_crypto_t::g_dh1536_g[] = { 0x02 };
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 static pthread_once_t init_once = PTHREAD_ONCE_INIT;
 #endif
+
 
 em_crypto_t::em_crypto_t()
     : m_crypto_info{}
@@ -155,8 +173,13 @@ int em_crypto_t::init()
     }
 
     // Get private and public keys (pre 3.0)
-    DH_get0_key(dh, const_cast<const BIGNUM**> (&pub_key), const_cast<const BIGNUM**> (&priv_key));
-    DH_get0_key(dh, const_cast<const BIGNUM**> (&pub_key), const_cast<const BIGNUM**> (&priv_key));
+    #if OPENSSL_VERSION_NUMBER < 0x10100000L
+        pub_key = dh->pub_key;
+        priv_key = dh->priv_key;
+    #else
+        DH_get0_key(dh, const_cast<const BIGNUM**> (&pub_key), const_cast<const BIGNUM**> (&priv_key));
+        DH_get0_key(dh, const_cast<const BIGNUM**> (&pub_key), const_cast<const BIGNUM**> (&priv_key));
+    #endif
 #else
 
     if (NULL == (param_pkey = create_dh_pkey(p, g, NULL, NULL))){
@@ -237,7 +260,7 @@ uint8_t em_crypto_t::platform_hash(const EVP_MD * hashing_algo, uint8_t num_elem
     uint8_t       res = 1;
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-    ctx = EVP_MD_CTX_new();
+    ctx = evp_md_ctx_new_compat();
     if (!ctx) {
         return 0;
     }
@@ -270,7 +293,7 @@ uint8_t em_crypto_t::platform_hash(const EVP_MD * hashing_algo, uint8_t num_elem
     }
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-    EVP_MD_CTX_free(ctx);
+    EVP_MD_CTX_destroy(ctx);
 #endif
 
     return res;
@@ -298,7 +321,7 @@ uint8_t em_crypto_t::platform_hmac_hash(const EVP_MD * hashing_algo, uint8_t *ke
     size_t        i;
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-    ctx = EVP_MD_CTX_new();
+    ctx = evp_md_ctx_new_compat();
 #elif OPENSSL_VERSION_NUMBER >= 0x10100000L
     ctx = HMAC_CTX_new();
 #else
@@ -348,7 +371,7 @@ uint8_t em_crypto_t::platform_hmac_hash(const EVP_MD * hashing_algo, uint8_t *ke
     if (pkey)
         EVP_PKEY_free(pkey);
     if (ctx)
-        EVP_MD_CTX_free(ctx);
+        EVP_MD_CTX_destroy(ctx);
 #elif OPENSSL_VERSION_NUMBER >= 0x10100000L
     HMAC_CTX_free(ctx);
 #else
@@ -362,7 +385,7 @@ bail:
     if (pkey)
         EVP_PKEY_free(pkey);
     if (ctx)
-        EVP_MD_CTX_free(ctx);
+        EVP_MD_CTX_destroy(ctx);
 #elif OPENSSL_VERSION_NUMBER >= 0x10100000L
     HMAC_CTX_free(ctx);
 #else
@@ -905,7 +928,7 @@ std::optional<std::vector<uint8_t>> em_crypto_t::sign_data_ecdsa(const std::vect
     EVP_MD_CTX_init(&md_ctx_obj);
     EVP_MD_CTX* md_ctx = &md_ctx_obj;
     #else
-    EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
+    EVP_MD_CTX* md_ctx = evp_md_ctx_new_compat();
     if (!md_ctx) {
         std::cerr << "Failed to create signature context" << std::endl;
         return std::nullopt;
@@ -919,7 +942,7 @@ std::optional<std::vector<uint8_t>> em_crypto_t::sign_data_ecdsa(const std::vect
         #if OPENSSL_VERSION_NUMBER < 0x10100000L
         EVP_MD_CTX_cleanup(md_ctx);
         #else
-        EVP_MD_CTX_free(md_ctx);
+        EVP_MD_CTX_destroy(md_ctx);
         #endif
         return std::nullopt;
     }
@@ -931,7 +954,7 @@ std::optional<std::vector<uint8_t>> em_crypto_t::sign_data_ecdsa(const std::vect
         #if OPENSSL_VERSION_NUMBER < 0x10100000L
         EVP_MD_CTX_cleanup(md_ctx);
         #else
-        EVP_MD_CTX_free(md_ctx);
+        EVP_MD_CTX_destroy(md_ctx);
         #endif
         return std::nullopt;
     }
@@ -944,7 +967,7 @@ std::optional<std::vector<uint8_t>> em_crypto_t::sign_data_ecdsa(const std::vect
         #if OPENSSL_VERSION_NUMBER < 0x10100000L
         EVP_MD_CTX_cleanup(md_ctx);
         #else
-        EVP_MD_CTX_free(md_ctx);
+        EVP_MD_CTX_destroy(md_ctx);
         #endif
         return std::nullopt;
     }
@@ -957,7 +980,7 @@ std::optional<std::vector<uint8_t>> em_crypto_t::sign_data_ecdsa(const std::vect
         #if OPENSSL_VERSION_NUMBER < 0x10100000L
         EVP_MD_CTX_cleanup(md_ctx);
         #else
-        EVP_MD_CTX_free(md_ctx);
+        EVP_MD_CTX_destroy(md_ctx);
         #endif
         return std::nullopt;
     }
@@ -969,7 +992,7 @@ std::optional<std::vector<uint8_t>> em_crypto_t::sign_data_ecdsa(const std::vect
     #if OPENSSL_VERSION_NUMBER < 0x10100000L
     EVP_MD_CTX_cleanup(md_ctx);
     #else
-    EVP_MD_CTX_free(md_ctx);
+    EVP_MD_CTX_destroy(md_ctx);
     #endif
     
     return signature;
@@ -1616,7 +1639,7 @@ SSL_KEY *em_crypto_t::create_ec_key_from_coordinates(const EC_GROUP* group,
     }
 
     // Add private key if provided
-    if (priv_key_bytes.has_value()) {
+    if (priv_key_bytes) {
         priv_key_bn =
             BN_bin2bn(priv_key_bytes->data(), static_cast<int>(priv_key_bytes->size()), nullptr);
         if (!priv_key_bn) {
@@ -1635,7 +1658,7 @@ SSL_KEY *em_crypto_t::create_ec_key_from_coordinates(const EC_GROUP* group,
     if (EVP_PKEY_fromdata_init(ctx) <= 0) goto err;
 
     // Create the key with the appropriate type
-    if (priv_key_bytes.has_value()) {
+    if (priv_key_bytes) {
         if (EVP_PKEY_fromdata(ctx, &pkey, EVP_PKEY_KEYPAIR, params) <= 0) {
             printf("Failed to create keypair from parameters\n");
             goto err;
@@ -1699,7 +1722,7 @@ SSL_KEY *em_crypto_t::create_ec_key_from_coordinates(const EC_GROUP* group,
         return nullptr;
     }
 
-    if (priv_key_bytes.has_value()) {
+    if (priv_key_bytes) {
         BIGNUM *priv = BN_bin2bn(priv_key_bytes->data(), priv_key_bytes->size(), nullptr);
         if (!priv || !EC_KEY_set_private_key(ec_key, priv)) {
             printf("Failed to set private key\n");
@@ -1731,7 +1754,7 @@ bool em_crypto_t::verify_signature(const std::vector<uint8_t> &message,
                                    const std::vector<uint8_t> &signature, EVP_PKEY *pkey,
                                    const EVP_MD *hash_function)
 {
-    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    EVP_MD_CTX *ctx = evp_md_ctx_new_compat();
     if (!ctx) {
         fprintf(stderr, "Failed to create verification context\n");
         return false;
@@ -1740,14 +1763,14 @@ bool em_crypto_t::verify_signature(const std::vector<uint8_t> &message,
     // Initialize the verification context with provided key and hash function
     if (EVP_DigestVerifyInit(ctx, nullptr, hash_function, nullptr, pkey) != 1) {
         fprintf(stderr, "Failed to initialize verification context\n");
-        EVP_MD_CTX_free(ctx);
+        EVP_MD_CTX_destroy(ctx);
         return false;
     }
 
     // Update the context with the message
     if (EVP_DigestVerifyUpdate(ctx, message.data(), message.size()) != 1) {
         fprintf(stderr, "Failed to update verification context\n");
-        EVP_MD_CTX_free(ctx);
+        EVP_MD_CTX_destroy(ctx);
         return false;
     }
 
@@ -1755,20 +1778,20 @@ bool em_crypto_t::verify_signature(const std::vector<uint8_t> &message,
     int verify_result = EVP_DigestVerifyFinal(ctx, signature.data(), signature.size());
     if (verify_result == 1) {
         // Signature is valid
-        EVP_MD_CTX_free(ctx);
+        EVP_MD_CTX_destroy(ctx);
         return true;
     }
     if (verify_result == 0) {
         // Signature is invalid
         fprintf(stderr, "Signature verification failed\n");
-        EVP_MD_CTX_free(ctx);
+        EVP_MD_CTX_destroy(ctx);
         return false;
     }
     fprintf(stderr, "Error during signature verification: %s\n",
             ERR_error_string(ERR_get_error(), nullptr));
 
     // Clean up
-    EVP_MD_CTX_free(ctx);
+    EVP_MD_CTX_destroy(ctx);
 
     return false;
 }
@@ -1830,7 +1853,9 @@ SSL_KEY *em_crypto_t::bundle_ec_key(const EC_GROUP* group, const EC_POINT *publi
     EM_ASSERT_NOT_NULL(public_key, NULL, "Public key is NULL");
     EM_ASSERT_NOT_NULL(group, NULL, "Group is NULL");
 
-    auto [x, y] = ec_crypto::get_ec_x_y(group, public_key);
+    auto xy = ec_crypto::get_ec_x_y(group, public_key);
+    auto x = xy.first;
+    auto y = xy.second;
     if (!x || !y) {
         return NULL;
     }

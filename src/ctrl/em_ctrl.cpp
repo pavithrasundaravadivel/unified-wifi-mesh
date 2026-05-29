@@ -46,6 +46,9 @@
 #include "em_orch_ctrl.h"
 #include "util.h"
 #include "wifi_util.h"
+#include <ccsp/bus_common.h>
+#include <ccsp/bus.h>
+#include "rbus.h"
 
 #ifdef AL_SAP
 #include "al_service_access_point.h"
@@ -1237,7 +1240,7 @@ int main(int argc, const char *argv[])
 
 #endif // TESTING
 
-extern "C" void wifi_util_print(wifi_log_level_t level, wifi_dbg_type_t module, const char *format, ...)
+extern "C" void wifi_util_print(wifi_log_level_t level, wifi_dbg_type_t module, char *format, ...)
 {
 
 }

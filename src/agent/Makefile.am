@@ -33,7 +33,7 @@ onewifi_em_agent_CPPFLAGS = \
     -I$(top_srcdir)/src/util \
     -I$(top_srcdir)/src/util_crypto
 
-onewifi_em_agent_CXXFLAGS = $(INCLUDEDIRS) -g -Wall -Wextra -pedantic -Wpedantic -Wpointer-arith -Wcast-qual -Wcast-align -Wstrict-aliasing -fno-common -Wctor-dtor-privacy -Wold-style-cast -Woverloaded-virtual -Wsign-promo -Wstrict-null-sentinel -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE -pie -ftrapv -Wformat=2 -Wformat-security -Wuninitialized -Winit-self -Wsign-conversion -Weffc++ -Wno-unused-parameter -std=c++17 -fno-omit-frame-pointer #-Wconversion -Werror -O2
+onewifi_em_agent_CXXFLAGS = $(INCLUDEDIRS) -g -Wall -Wextra -pedantic -Wpedantic -Wpointer-arith -Wcast-qual -Wcast-align -Wstrict-aliasing -fno-common -Wctor-dtor-privacy -Wold-style-cast -Woverloaded-virtual -Wsign-promo -Wstrict-null-sentinel -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE -pie -ftrapv -Wformat=2 -Wformat-security -Wuninitialized -Winit-self -Wsign-conversion -Weffc++ -Wno-unused-parameter -fno-omit-frame-pointer #-Wconversion -Werror -O2
 if EM_ASAN_AGENT
 onewifi_em_agent_CXXFLAGS += -fsanitize=address -fsanitize=undefined
 endif
@@ -125,6 +125,7 @@ onewifi_em_agent_SOURCES =  \
      $(top_srcdir)/src/orch/em_orch_agent.cpp \
      $(top_srcdir)/src/utils/util.cpp \
      $(top_srcdir)/src/utils/timer.cpp \
+     $(top_srcdir)/src/utils/collection.c \
      $(top_srcdir)/src/util_crypto/aes_siv.c
 
 
@@ -132,8 +133,8 @@ onewifi_em_agent_LDFLAGS = -lm -lpthread -ldl -lcjson -luuid -lssl -lcrypto -lwi
 if EM_ASAN_AGENT
 onewifi_em_agent_LDFLAGS += -fsanitize=address -fsanitize=undefined
 endif
-
 onewifi_em_agent_LDADD = $(top_builddir)/src/al-sap/libalsap.la
+onewifi_em_agent_LDADD += -lstdc++fs
 if EM_UNITTEST
 onewifi_em_agent_test_SOURCES = \
 	$(onewifi_em_agent_SOURCES) \
@@ -177,6 +178,7 @@ onewifi_em_agent_test_SOURCES = \
 	$(top_srcdir)/tests/test_l1_em_orch_agent.cpp \
 	$(top_srcdir)/tests/test_l1_em_msg.cpp \
 	$(top_srcdir)/tests/test_l1_timer.cpp \
+	$(top_srcdir)/tests/test_l1_collection.c \
 	$(top_srcdir)/tests/test_l1_util.cpp \
 	$(top_srcdir)/tests/test_l1_ec_1905_encrypt_layer.cpp \
 	$(top_srcdir)/tests/test_l1_ec_enrollee.cpp \

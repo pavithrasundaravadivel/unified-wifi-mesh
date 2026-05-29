@@ -411,7 +411,7 @@ class em_capability_t {
 	 *
 	 * @note Ensure that the buffer is properly allocated before calling this function.
 	 */
-	virtual short create_ap_radio_advanced_cap_tlv(unsigned char *buff) = 0;
+	virtual short create_radioad_tlv(unsigned char *buff) = 0;
     
 	/**!
 	 * @brief Creates a metric collection integer TLV.
@@ -543,9 +543,7 @@ class em_capability_t {
 	 *
 	 * @note Ensure the buffer is properly allocated and contains valid TLV data before calling this function.
 	 */
-	virtual int handle_eht_operations_tlv(unsigned char *buff, unsigned short len) = 0;
-
-	int handle_channel_scan_cap_tlv(unsigned char *buff, unsigned int len);
+	int handle_eht_operations_tlv(unsigned char *buff);
 
 	/**!
 	 * @brief Creates an AP capability report message.
@@ -701,7 +699,7 @@ class em_capability_t {
 	 * @note Ensure that the data buffer is valid and the length is correctly specified.
 	 */
 	int handle_ap_cap_report(unsigned char *data, unsigned int len);
-
+    
 	/**!
 	 * @brief Handles the client capability report.
 	 *

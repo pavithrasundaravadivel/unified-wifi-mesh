@@ -1575,35 +1575,35 @@ struct ieee80211_mgmt {
             le16 auth_transaction;
             le16 status_code;
             /* possibly followed by Challenge text */
-            uint8_t variable[];
+            uint8_t variable[0];
         } __attribute__((packed)) auth;
         struct {
             le16 reason_code;
-            uint8_t variable[];
+            uint8_t variable[0];
         } __attribute__((packed)) deauth;
         struct {
             le16 capab_info;
             le16 listen_interval;
             /* followed by SSID and Supported rates */
-            uint8_t variable[];
+            uint8_t variable[0];
         } __attribute__((packed)) assoc_req;
         struct {
             le16 capab_info;
             le16 status_code;
             le16 aid;
             /* followed by Supported rates */
-            uint8_t variable[];
+            uint8_t variable[0];
         } __attribute__((packed)) assoc_resp, reassoc_resp;
         struct {
             le16 capab_info;
             le16 listen_interval;
             uint8_t current_ap[6];
             /* followed by SSID and Supported rates */
-            uint8_t variable[];
+            uint8_t variable[0];
         } __attribute__((packed)) reassoc_req;
         struct {
             le16 reason_code;
-            uint8_t variable[];
+            uint8_t variable[0];
         } __attribute__((packed)) disassoc;
         struct {
             uint8_t timestamp[8];
@@ -1611,7 +1611,7 @@ struct ieee80211_mgmt {
             le16 capab_info;
             /* followed by some of SSID, Supported rates,
              * FH Params, DS Params, CF Params, IBSS Params, TIM */
-            uint8_t variable[];
+            uint8_t variable[0];
         } __attribute__((packed)) beacon;
         /* probe_req: only variable items: SSID, Supported rates */
         struct {
@@ -1620,7 +1620,7 @@ struct ieee80211_mgmt {
             le16 capab_info;
             /* followed by some of SSID, Supported rates,
              * FH Params, DS Params, CF Params, IBSS Params */
-            uint8_t variable[];
+            uint8_t variable[0];
         } __attribute__((packed)) probe_resp;
         struct {
             uint8_t category;
@@ -1629,7 +1629,7 @@ struct ieee80211_mgmt {
                     uint8_t action_code;
                     uint8_t dialog_token;
                     uint8_t status_code;
-                    uint8_t variable[];
+                    uint8_t variable[0];
                 } __attribute__((packed)) wmm_action;
                 struct{
                     uint8_t action_code;
@@ -1643,45 +1643,45 @@ struct ieee80211_mgmt {
                     uint8_t action;
                     uint8_t sta_addr[ETH_ALEN];
                     uint8_t target_ap_addr[ETH_ALEN];
-                    uint8_t variable[]; /* FT Request */
+                    uint8_t variable[0]; /* FT Request */
                 } __attribute__((packed)) ft_action_req;
                 struct {
                     uint8_t action;
                     uint8_t sta_addr[ETH_ALEN];
                     uint8_t target_ap_addr[ETH_ALEN];
                     le16 status_code;
-                    uint8_t variable[]; /* FT Request */
+                    uint8_t variable[0]; /* FT Request */
                 } __attribute__((packed)) ft_action_resp;
                 struct {
                     uint8_t action;
                     uint8_t trans_id[WLAN_SA_QUERY_TR_ID_LEN];
-                    uint8_t variable[]; /* OCI element */
+                    uint8_t variable[0]; /* OCI element */
                 } __attribute__((packed)) sa_query_req;
                 struct {
                     uint8_t action; /* */
                     uint8_t trans_id[WLAN_SA_QUERY_TR_ID_LEN];
-                    uint8_t variable[]; /* OCI element */
+                    uint8_t variable[0]; /* OCI element */
                 } __attribute__((packed)) sa_query_resp;
                 struct {
                     uint8_t action;
                     uint8_t dialogtoken;
-                    uint8_t variable[];
+                    uint8_t variable[0];
                 } __attribute__((packed)) wnm_sleep_req;
                 struct {
                     uint8_t action;
                     uint8_t dialogtoken;
                     le16 keydata_len;
-                    uint8_t variable[];
+                    uint8_t variable[0];
                 } __attribute__((packed)) wnm_sleep_resp;
                 struct {
                     uint8_t action;
-                    uint8_t variable[];
+                    uint8_t variable[0];
                 } __attribute__((packed)) public_action;
                 struct {
                     uint8_t action; /* 9 */
                     uint8_t oui[3];
                     /* Vendor-specific content */
-                    uint8_t variable[];
+                    uint8_t variable[0];
                 } __attribute__((packed)) vs_public_action;
                 struct {
                     uint8_t action; /* 7 */
@@ -1693,7 +1693,7 @@ struct ieee80211_mgmt {
                      * Session Information URL (optional),
                      * BSS Transition Candidate List
                      * Entries */
-                    uint8_t variable[];
+                    uint8_t variable[0];
                 } __attribute__((packed)) bss_tm_req;
                 struct {
                     uint8_t action; /* 8 */
@@ -1703,7 +1703,7 @@ struct ieee80211_mgmt {
                     /* Target BSSID (optional),
                      * BSS Transition Candidate List
                      * Entries (optional) */
-                    uint8_t variable[];
+                    uint8_t variable[0];
                 } __attribute__((packed)) bss_tm_resp;
                 struct {
                     uint8_t action; /* 6 */
@@ -1711,7 +1711,7 @@ struct ieee80211_mgmt {
                     uint8_t query_reason;
                     /* BSS Transition Candidate List
                      * Entries (optional) */
-                    uint8_t variable[];
+                    uint8_t variable[0];
                 } __attribute__((packed)) bss_tm_query;
                 struct {
                     uint8_t action; /* 11 */
@@ -1721,20 +1721,20 @@ struct ieee80211_mgmt {
                 struct {
                     uint8_t action; /* 12 */
                     uint8_t dialog_token;
-                    uint8_t variable[];
+                    uint8_t variable[0];
                 } __attribute__((packed)) coloc_intf_report;
                 struct {
                     uint8_t action; /* 15 */
-                    uint8_t variable[];
+                    uint8_t variable[0];
                 } __attribute__((packed)) slf_prot_action;
                 struct {
                     uint8_t action;
-                    uint8_t variable[];
+                    uint8_t variable[0];
                 } __attribute__((packed)) fst_action;
                 struct {
                     uint8_t action;
                     uint8_t dialog_token;
-                    uint8_t variable[];
+                    uint8_t variable[0];
                 } __attribute__((packed)) rrm;
             } u;
         } __attribute__((packed)) action;

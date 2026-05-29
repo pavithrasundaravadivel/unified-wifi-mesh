@@ -26,7 +26,7 @@ ec_enrollee_t::ec_enrollee_t(const std::string& al_mac_addr, ec_ops_t& ops, std:
                   this, std::placeholders::_1, std::placeholders::_2));
 
     // Import existing security context
-    if (existing_sec_ctx.has_value()) {
+    if (existing_sec_ctx) {
         m_sec_ctx = existing_sec_ctx.value();
     }
 }
@@ -208,7 +208,12 @@ void ec_enrollee_t::send_presence_announcement_frames()
     uint32_t attempts = 0;
     uint32_t dwell = 2000;
 
-    auto [frame, frame_len] = create_presence_announcement();
+
+auto tmp = create_presence_announcement();
+
+auto frame = tmp.first;
+auto frame_len = tmp.second;
+
     if (frame == nullptr || frame_len == 0) {
         em_printfout("Failed to create DPP Presence Announcement frame");
         return;
@@ -283,8 +288,9 @@ void ec_enrollee_t::send_reconfiguration_announcement_frames()
     // 2 seconds
     constexpr uint32_t dwell = 2000;
     uint32_t attempts = 0;
-    auto [frame, frame_len] = create_recfg_presence_announcement();
-
+    auto tmp = create_recfg_presence_announcement();
+    auto frame = tmp.first;
+    auto frame_len = tmp.second;
     if (frame == nullptr || frame_len == 0) {
         em_printfout("Failed to create DPP Reconfiguration Announcement frame");
         return;
@@ -391,7 +397,9 @@ bool ec_enrollee_t::handle_recfg_auth_request(ec_frame_t *frame, size_t len, uin
     // Now response generation work can begin
 
     // Generate new keypair P_R, p_R
-    auto [p_R, P_R] = ec_crypto::generate_proto_keypair(m_c_ctx);
+    auto tmp1 = ec_crypto::generate_proto_keypair(m_c_ctx);
+    const BIGNUM* p_R = tmp1.first;
+    const EC_POINT* P_R = tmp1.second;
     if (P_R == nullptr || p_R == nullptr) {
         em_printfout("Failed to generate new protocol keypair P_R, p_R");
         return false;
@@ -401,7 +409,6 @@ bool ec_enrollee_t::handle_recfg_auth_request(ec_frame_t *frame, size_t len, uin
     EC_POINT_free(m_eph_ctx().public_resp_proto_key);
     m_eph_ctx().priv_resp_proto_key = const_cast<BIGNUM *>(p_R);
     m_eph_ctx().public_resp_proto_key = const_cast<EC_POINT*>(P_R);
-
 
     // Generate new E-Nonce
     ec_crypto::rand_zero(m_eph_ctx().e_nonce, m_c_ctx.nonce_len);
@@ -472,7 +479,9 @@ bool ec_enrollee_t::handle_recfg_auth_request(ec_frame_t *frame, size_t len, uin
 
     // Now with new shared secret M and authentication key ke, we can create the Reconfiguration Response frame
 
-    auto [response_frame, response_frame_len] = create_recfg_auth_response(m_eph_ctx().transaction_id, dpp_version);
+    auto resp = create_recfg_auth_response(m_eph_ctx().transaction_id, dpp_version);
+    auto response_frame = resp.first;
+    auto response_frame_len = resp.second;
     if (response_frame == nullptr || response_frame_len == 0) {
         em_printfout("Failed to create Reconfiguration Authentication Response frame");
         return false;
@@ -520,7 +529,9 @@ bool ec_enrollee_t::handle_recfg_auth_confirm(ec_frame_t *frame, size_t len, uin
 
     // Upon receipt of the DPP Reconfiguration Authentication Confirm frame, the Enrollee attempts to decrypt the encrypted payload.
     // Note: spec, again, doesn't specify what to do if decryption fails, so we assume it to mean restart Recfg Announcements
-    auto [unwrapped_data, unwrapped_len] = ec_util::unwrap_wrapped_attrib(*wrapped_data_attr, frame, true, m_eph_ctx().ke);
+    auto tmp = ec_util::unwrap_wrapped_attrib(*wrapped_data_attr, frame, true, m_eph_ctx().ke);
+    auto unwrapped_data = tmp.first;
+    auto unwrapped_len = tmp.second;
     if (unwrapped_data == nullptr || unwrapped_len == 0) {
         em_printfout("Failed to unwrap wrapped data attribute in Reconfiguration Authentication Confirm frame with ke, restarting Reconfiguration Announcement frames");
         restart_recfg_announcement();
@@ -565,7 +576,9 @@ bool ec_enrollee_t::handle_recfg_auth_confirm(ec_frame_t *frame, size_t len, uin
     ASSERT_OPT_HAS_VALUE_FREE(recfg_flags_attr, false, unwrapped_data, "%s:%d: No Reconfig-Flags attribute found in unwrapped data of Reconfiguration Authentication Confirm frame\n", __func__, __LINE__);
 
     // If all's well, we can create and send a Configuration request
-    auto [config_request_frame, config_request_frame_len] = create_config_request(*reinterpret_cast<ec_dpp_reconfig_flags_t*>(recfg_flags_attr->data[0]));
+    auto req = create_config_request(*reinterpret_cast<ec_dpp_reconfig_flags_t*>(recfg_flags_attr->data[0]));
+    auto config_request_frame = req.first;
+    auto config_request_frame_len = req.second;
     if (config_request_frame == nullptr || config_request_frame_len == 0) {
         em_printfout("Failed to create Configuration Request frame for Reconfiguration");
         free(unwrapped_data);
@@ -673,7 +686,9 @@ Authentication Request frame without replying to it.
     ASSERT_OPT_HAS_VALUE(wrapped_data_attr, false, "%s:%d No wrapped data attribute found\n", __func__, __LINE__);
 
     // Attempt to unwrap the wrapped data with generated k1 (from sent keys)
-    auto [wrapped_data, wrapped_len] = ec_util::unwrap_wrapped_attrib(*wrapped_data_attr, frame, true, m_eph_ctx().k1); 
+    auto tmp = ec_util::unwrap_wrapped_attrib(*wrapped_data_attr, frame, true, m_eph_ctx().k1); 
+    auto wrapped_data = tmp.first;
+    auto wrapped_len = tmp.second;
     if (wrapped_data == NULL || wrapped_len == 0) {
         em_printfout("failed to unwrap wrapped data");
         // "Abondon the exchange"
@@ -709,7 +724,9 @@ Authentication Request frame without replying to it.
         STATUS_NOT_COMPATIBLE:
         Responder → Initiator: DPP Status, SHA-256(BR), [ SHA-256(BI),][ Protocol Version ], { I-nonce, R-capabilities}k1
         */
-        auto [resp_frame, resp_len] = create_auth_response(DPP_STATUS_NOT_COMPATIBLE, init_proto_version);
+        auto tmp = create_auth_response(DPP_STATUS_NOT_COMPATIBLE, init_proto_version);
+        auto resp_frame = tmp.first;
+        auto resp_len = tmp.second;
         if (resp_frame == NULL || resp_len == 0) {
             em_printfout("failed to create response frame");
             return false;
@@ -729,7 +746,9 @@ Authentication Request frame without replying to it.
         STATUS_RESPONSE_PENDING:
         Responder → Initiator: DPP Status, SHA-256(BR), [ SHA-256(BI),][ Protocol Version ], { I-nonce, R-capabilities}k1
         */
-        auto [resp_frame, resp_len] = create_auth_response(DPP_STATUS_RESPONSE_PENDING, init_proto_version);
+        auto tmp = create_auth_response(DPP_STATUS_RESPONSE_PENDING, init_proto_version);
+        auto resp_frame = tmp.first;
+        auto resp_len = tmp.second;
         if (resp_frame == NULL || resp_len == 0) {
             em_printfout("failed to create response frame");
             return false;
@@ -746,7 +765,9 @@ Authentication Request frame without replying to it.
     STATUS_OK:
     Responder → Initiator: DPP Status, SHA-256(BR), [ SHA-256(BI), ] PR, [Protocol Version], { R-nonce, I-nonce, R-capabilities, { R-auth }ke }k2
     */
-    auto [resp_frame, resp_len] = create_auth_response(DPP_STATUS_OK, init_proto_version);
+    auto resp = create_auth_response(DPP_STATUS_OK, init_proto_version);
+    auto resp_frame = resp.first;
+    auto resp_len = resp.second;
     if (resp_frame == NULL || resp_len == 0) {
         em_printfout("failed to create response frame");
         return false;
@@ -783,7 +804,9 @@ bool ec_enrollee_t::handle_auth_confirm(ec_frame_t *frame, size_t len, uint8_t s
     EM_ASSERT_NOT_NULL(key, false, "k_e or k_2 is NULL (status=%s)!", status_str.c_str());
 
     // If DPP Status is OK, wrap the I-auth with the KE key, otherwise wrap the Responder Nonce with the K2 key
-    auto [unwrapped_data, unwrapped_data_len] = ec_util::unwrap_wrapped_attrib(*wrapped_attr, frame, true, key);
+    auto tmp = ec_util::unwrap_wrapped_attrib(*wrapped_attr, frame, true, key);
+    auto unwrapped_data = tmp.first;
+    auto unwrapped_data_len = tmp.second;
     if (unwrapped_data == NULL || unwrapped_data_len == 0) {
         em_printfout("Failed to unwrap wrapped data, aborting exchange");
         // Aborts exchange
@@ -873,7 +896,9 @@ bool ec_enrollee_t::handle_auth_confirm(ec_frame_t *frame, size_t len, uint8_t s
         return false;
     }
 
-    const auto [config_req, config_req_len] = create_config_request();
+    auto req = create_config_request();
+    auto config_req = req.first;
+    auto config_req_len = req.second;
     if (config_req == nullptr || config_req_len == 0) {
         em_printfout("Could not create DPP Configuration Request!");
         return false;
@@ -949,7 +974,9 @@ bool ec_enrollee_t::handle_config_response(uint8_t *query_resp, size_t len, uint
     auto wrapped_attrs = ec_util::get_attrib(query_resp, len, ec_attrib_id_wrapped_data);
     ASSERT_OPT_HAS_VALUE(wrapped_attrs, false, "%s:%d: Failed to get wrapped data attribute!\n", __func__, __LINE__);
 
-    auto [unwrapped_attrs, unwrapped_attrs_len] = ec_util::unwrap_wrapped_attrib(*wrapped_attrs, query_resp, true, m_eph_ctx().ke);
+    auto tmp = ec_util::unwrap_wrapped_attrib(*wrapped_attrs, query_resp, true, m_eph_ctx().ke);
+    auto unwrapped_attrs = tmp.first;
+    auto unwrapped_attrs_len = tmp.second;
     if (unwrapped_attrs == nullptr || unwrapped_attrs_len == 0) {
         em_printfout("Failed to unwrap wrapped attributes.");
         return false;
@@ -967,7 +994,7 @@ bool ec_enrollee_t::handle_config_response(uint8_t *query_resp, size_t len, uint
     auto send_connection_status_attr = ec_util::get_attrib(unwrapped_attrs, unwrapped_attrs_len, ec_attrib_id_send_conn_status);
 
     // Only necessary if Configurator includes "sendConnStatus" in Configuration response.
-    bool needs_connection_status = (send_connection_status_attr.has_value());
+    bool needs_connection_status = static_cast<bool>(send_connection_status_attr);
 
     // Parse JSON objects
     scoped_cjson ieee1905_configuration_object(
@@ -998,7 +1025,9 @@ bool ec_enrollee_t::handle_config_response(uint8_t *query_resp, size_t len, uint
 
     if (pp_key_obj != nullptr) {
         if (m_sec_ctx.pp_key) em_crypto_t::free_key(m_sec_ctx.pp_key);
-        auto [ppk_group, ppk_pub] = ec_crypto::decode_jwk(pp_key_obj);
+        auto tmp = ec_crypto::decode_jwk(pp_key_obj);
+        auto ppk_group = tmp.first;
+        auto ppk_pub = tmp.second;
         EM_ASSERT_NOT_NULL(ppk_pub, false, "Failed to decode 'ppKey' from bSTA Configuration object");
         m_sec_ctx.pp_key = em_crypto_t::bundle_ec_key(ppk_group, ppk_pub);
         EM_ASSERT_NOT_NULL(m_sec_ctx.pp_key, false, "Failed to bundle 'ppKey' public key from bSTA Configuration object");
@@ -1020,7 +1049,9 @@ bool ec_enrollee_t::handle_config_response(uint8_t *query_resp, size_t len, uint
         EM_ASSERT_NOT_NULL(m_sec_ctx.connector, false, "Failed to copy 'signedConnector' from configuration response");
 
         if (m_sec_ctx.C_signing_key) em_crypto_t::free_key(m_sec_ctx.C_signing_key);
-        auto [csign_group_raw, csign_pub_raw] = ec_crypto::decode_jwk(csign_obj);
+        auto tmp = ec_crypto::decode_jwk(csign_obj);
+        auto csign_group_raw = tmp.first;
+        auto csign_pub_raw = tmp.second;
         EM_ASSERT_NOT_NULL(csign_group_raw, false, "Failed to decode 'csign' group from configuration response");
         EM_ASSERT_NOT_NULL(csign_pub_raw, false, "Failed to decode 'csign' from configuration response");
 
@@ -1083,7 +1114,9 @@ bool ec_enrollee_t::handle_config_response(uint8_t *query_resp, size_t len, uint
     // It does not mention that this status indicates real association success/failure
     // So, just send DPP_STATUS_OK as there's no configuration application mechanism here
     ec_status_code_t connection_status = DPP_STATUS_OK;
-    auto [config_result_frame, config_result_frame_len] = create_config_result(connection_status);
+    auto res = create_config_result(connection_status);
+    auto config_result_frame = res.first;
+    auto config_result_frame_len = res.second;
     if (config_result_frame == nullptr || config_result_frame_len == 0) {
         em_printfout("Failed to create DPP Configuration Result frame");
         return false;
@@ -1233,7 +1266,9 @@ std::pair<uint8_t *, size_t> ec_enrollee_t::create_auth_response(ec_status_code_
     }
 
     // Generate initiator protocol key pair (p_i/P_I)
-    auto [priv_resp_proto_key, pub_resp_proto_key] = ec_crypto::generate_proto_keypair(m_c_ctx);
+    auto tmp = ec_crypto::generate_proto_keypair(m_c_ctx);
+    auto priv_resp_proto_key = tmp.first;
+    auto pub_resp_proto_key = tmp.second;
     if (priv_resp_proto_key == NULL || pub_resp_proto_key == NULL) {
         em_printfout("failed to generate responder protocol keypair");
         free(attribs);
@@ -1590,13 +1625,15 @@ std::pair<uint8_t *, size_t> ec_enrollee_t::create_config_request(std::optional<
     // By default, a new key-pair should be generated
     // Only when the DPP_CONFIG_REUSEKEY flag is set, we will reuse the existing keypair
     bool replace_key = true;
-    if (recfg_flags.has_value()) {
+    if (recfg_flags) {
         replace_key = (recfg_flags->connector_key == DPP_CONFIG_REPLACEKEY);
     }
 
     if (replace_key) {
         em_printfout("CONFIG_REPLACEKEY set, generating new protocol keypair");
-        auto [p_R, P_R] = ec_crypto::generate_proto_keypair(m_c_ctx);
+        auto tmp = ec_crypto::generate_proto_keypair(m_c_ctx);
+        auto p_R = tmp.first;
+        auto P_R = tmp.second;
         if (p_R == nullptr || P_R == nullptr) {
             em_printfout("Failed to generate new proto keypair");
             return {};
@@ -1652,7 +1689,9 @@ std::pair<uint8_t *, size_t> ec_enrollee_t::create_config_request(std::optional<
     // must be unique per GAS frame "session" exchange.
     // See: 802.11-2020 9.4.1.12 Dialog Token field
     unsigned char dialog_token = 1;
-    auto [frame, frame_len] = ec_util::alloc_gas_frame(dpp_gas_initial_req, dialog_token);
+    auto tmp = ec_util::alloc_gas_frame(dpp_gas_initial_req, dialog_token);
+    auto frame = tmp.first;
+    auto frame_len = tmp.second;
     if (frame == nullptr || frame_len == 0) {
         em_printfout("Could not create DPP Configuration Request GAS frame!");
         return {};
@@ -1850,7 +1889,9 @@ bool ec_enrollee_t::handle_gas_initial_response(ec_gas_initial_response_frame_t 
 
 ec_gas_comeback_request_frame_t *ec_enrollee_t::create_comeback_request(uint8_t dialog_token)
 {
-    auto [frame, len] = ec_util::alloc_gas_frame(dpp_gas_comeback_req, dialog_token);
+    auto tmp = ec_util::alloc_gas_frame(dpp_gas_comeback_req, dialog_token);
+    auto frame = tmp.first;
+    auto len = tmp.second;
     if (frame == nullptr || len == 0) return nullptr;
     return reinterpret_cast<ec_gas_comeback_request_frame_t*>(frame);
 }
@@ -1860,7 +1901,9 @@ bool ec_enrollee_t::send_autoconf_search_chirp(){
     uint8_t *resp_boot_key_chirp_hash = ec_crypto::compute_key_hash(m_boot_data().responder_boot_key, "chirp");
     EM_ASSERT_NOT_NULL(resp_boot_key_chirp_hash, false, "Failed to compute hash of responder boot key, can't send autoconf search");
 
-    auto [chirp, chirp_len] = ec_util::create_dpp_chirp_tlv(false, true, nullptr, resp_boot_key_chirp_hash, SHA256_DIGEST_LENGTH);
+    auto tmp = ec_util::create_dpp_chirp_tlv(false, true, nullptr, resp_boot_key_chirp_hash, SHA256_DIGEST_LENGTH);
+    auto chirp = tmp.first;
+    auto chirp_len = tmp.second;
     free(resp_boot_key_chirp_hash);
     if (!chirp || chirp_len == 0) {
         em_printfout("Failed to create chirp tlv for autoconf search");
@@ -1919,7 +1962,9 @@ bool ec_enrollee_t::handle_assoc_status(const rdk_sta_data_t &sta_data)
             return false;
     }
 
-    auto [frame, frame_len] = create_connection_status_result(dpp_status, std::string(sta_data.bss_info.ssid));
+    auto tmp = create_connection_status_result(dpp_status, std::string(sta_data.bss_info.ssid));
+    auto frame = tmp.first;
+    auto frame_len = tmp.second;
     if (frame == nullptr || frame_len == 0) {
         em_printfout("Failed to create Configuration Connection Status Result frame!");
         return false;

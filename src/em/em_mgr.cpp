@@ -45,6 +45,7 @@
 #include "em_msg.h"
 #include "em_cmd.h"
 #include "util.h"
+#include "collection.h"
 
 #ifdef AL_SAP
 #include "al_service_access_point.h"

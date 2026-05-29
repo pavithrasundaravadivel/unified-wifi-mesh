@@ -160,7 +160,9 @@ bool ec_ctrl_configurator_t::process_chirp_notification(em_dpp_chirp_value_t *ch
     free(resp_boot_key_chirp_hash);
 
 
-    auto [auth_frame, auth_frame_len] = create_auth_request(mac_str);
+    auto tmp1 = create_auth_request(mac_str);
+    auto auth_frame = tmp1.first;
+    auto auth_frame_len = tmp1.second;
     if (auth_frame == NULL || auth_frame_len == 0) {
         em_printfout("Failed to create authentication request frame");
         free(hash);
@@ -168,14 +170,18 @@ bool ec_ctrl_configurator_t::process_chirp_notification(em_dpp_chirp_value_t *ch
     }
 
     // Create Auth Request Encap TLV: EasyMesh 5.3.4
-    auto [encap_dpp_tlv, encap_dpp_size] = ec_util::create_encap_dpp_tlv(0, mac, ec_frame_type_auth_req, auth_frame, auth_frame_len);
+    auto tmp2 = ec_util::create_encap_dpp_tlv(0, mac, ec_frame_type_auth_req, auth_frame, auth_frame_len);
+    auto encap_dpp_tlv = tmp2.first;
+    auto encap_dpp_size = tmp2.second;
     ASSERT_NOT_NULL_FREE2(encap_dpp_tlv, false, auth_frame, hash, "%s:%d: Failed to create Encap DPP TLV\n", __func__, __LINE__);
 
     free(auth_frame);
 
     // Create Auth Request Chirp TLV: EasyMesh 5.3.4
 
-    auto [chirp, chirp_tlv_size] = ec_util::create_dpp_chirp_tlv(true, true, mac, hash, hash_len);
+    auto tmp3 = ec_util::create_dpp_chirp_tlv(true, true, mac, hash, hash_len);
+    auto chirp = tmp3.first;
+    auto chirp_tlv_size = tmp3.second;
     ASSERT_NOT_NULL_FREE2(chirp, false, encap_dpp_tlv, hash, "%s:%d: Failed to create Chirp TLV\n", __func__, __LINE__);
     free(hash);
 
@@ -345,7 +351,9 @@ bool ec_ctrl_configurator_t::handle_autoconf_chirp(em_dpp_chirp_value_t* chirp, 
     auto mac_ctx = find_conn_ctx(enrollee_hash, enrollee_hash_len);
     EM_ASSERT_OPT_HAS_VALUE_FREE(mac_ctx, false, enrollee_hash, "No connection context found for Enrollee with matching hash. Has the DPP URI been given?\n");
 
-    auto [enroleee_phy_mac, e_conn_ctx] = mac_ctx.value();
+    auto tmp1 = mac_ctx.value();
+    auto enroleee_phy_mac = tmp1.first;
+    auto e_conn_ctx = tmp1.second;
     std::string src_mac_str = util::mac_to_string(src_mac);
 
     EM_ASSERT_NOT_NULL_FREE(e_conn_ctx, false, enrollee_hash, "Received an autoconf search chirp from (AL MAC) '%s', but no connection context found for hash."
@@ -365,7 +373,9 @@ bool ec_ctrl_configurator_t::handle_autoconf_chirp(em_dpp_chirp_value_t* chirp, 
 
     // If they match, we respond with Autoconf Response (extended) including
     // a DPP chirp with hash_validity=1 and hash=enrollee_hash
-    auto [resp_chirp, resp_chirp_len] = ec_util::create_dpp_chirp_tlv(false, true, nullptr, enrollee_hash, enrollee_hash_len);
+    auto tmp = ec_util::create_dpp_chirp_tlv(false, true, nullptr, enrollee_hash, enrollee_hash_len);
+    auto resp_chirp = tmp.first;
+    auto resp_chirp_len = tmp.second;
     free(enrollee_hash);
     if (!resp_chirp || resp_chirp_len == 0) {
         em_printfout("Failed to create Chirp TLV for Autoconf Response (extended)");
@@ -384,7 +394,9 @@ bool ec_ctrl_configurator_t::handle_autoconf_chirp(em_dpp_chirp_value_t* chirp, 
     e_conn_ctx->is_eth = true;
 
     // Once we've sent the Autoconf Search Response (extended), the Enrollee will be awaiting a DPP Authentication Request frame.
-    auto [frame, frame_len] = create_auth_request(src_mac_str);
+    auto auth = create_auth_request(src_mac_str);
+    auto frame = auth.first;
+    auto frame_len = auth.second;
     if (!frame || frame_len == 0) {
         em_printfout("Failed to create DPP Authentication Request frame for Enrollee '%s'", src_mac_str.c_str());
         return false;
@@ -427,7 +439,9 @@ bool ec_ctrl_configurator_t::handle_proxied_config_result_frame(uint8_t *encap_f
     ASSERT_OPT_HAS_VALUE(wrapped_attr, false, "%s:%d: No wrapped data in Proxied DPP Configuration Result frame\n", __func__, __LINE__);
 
     // Unwrap with k_e
-    auto [unwrapped_attrs, unwrapped_attrs_len] = ec_util::unwrap_wrapped_attrib(*wrapped_attr, frame, false, e_ctx->ke);
+    auto tmp = ec_util::unwrap_wrapped_attrib(*wrapped_attr, frame, false, e_ctx->ke);
+    auto unwrapped_attrs = tmp.first;
+    auto unwrapped_attrs_len = tmp.second;
     if (unwrapped_attrs == nullptr || unwrapped_attrs_len == 0) {
         em_printfout("Failed to unwrap attributes.");
         return false;
@@ -484,7 +498,9 @@ bool ec_ctrl_configurator_t::handle_proxied_conn_status_result_frame(uint8_t *en
     ASSERT_OPT_HAS_VALUE(wrapped_attr, false, "%s:%d: No wrapped data in Proxied DPP Configuration Result frame\n", __func__, __LINE__);
 
     // Unwrap with k_e
-    auto [unwrapped_attrs, unwrapped_attrs_len] = ec_util::unwrap_wrapped_attrib(*wrapped_attr, frame, false, e_ctx->ke);
+    auto tmp = ec_util::unwrap_wrapped_attrib(*wrapped_attr, frame, false, e_ctx->ke);
+    auto unwrapped_attrs = tmp.first;
+    auto unwrapped_attrs_len = tmp.second;
     if (unwrapped_attrs == nullptr || unwrapped_attrs_len == 0) {
         em_printfout("Failed to unwrap attributes.");
         return false;
@@ -531,7 +547,9 @@ bool ec_ctrl_configurator_t::handle_proxied_dpp_configuration_request(uint8_t *e
     ASSERT_OPT_HAS_VALUE(wrapped_attrs, false, "%s:%d: No wrapped data attribute found!\n", __func__, __LINE__);
     
     ASSERT_NOT_NULL(e_ctx->ke, false, "%s:%d: Ephemeral context for Enrollee '" MACSTRFMT "' does not contain valid key 'ke'!\n", __func__, __LINE__, MAC2STR(src_mac));
-    auto [unwrapped_attrs, unwrapped_attrs_len] = ec_util::unwrap_wrapped_attrib(*wrapped_attrs, initial_request_frame->query, false, e_ctx->ke);
+    auto tmp = ec_util::unwrap_wrapped_attrib(*wrapped_attrs, initial_request_frame->query, false, e_ctx->ke);
+    auto unwrapped_attrs = tmp.first;
+    auto unwrapped_attrs_len = tmp.second;
     if (unwrapped_attrs == nullptr || unwrapped_attrs_len == 0) {
         em_printfout("Failed to unwraped wrapped data, aborting!");
         return false;
@@ -598,10 +616,14 @@ bool ec_ctrl_configurator_t::handle_proxied_dpp_configuration_request(uint8_t *e
     bool cannot_onboard_more = (m_can_onboard_additional_aps == nullptr || !m_can_onboard_additional_aps());
     if (cannot_onboard_more) {
         em_printfout("DPP Configuration Request frame received, but we cannot onboard any more APs! Rejecting with status %s", ec_util::status_code_to_string(DPP_STATUS_CONFIGURATION_FAILURE).c_str());
-        auto [config_response_frame, config_response_frame_len] = create_config_response_frame(src_mac, src_al_mac, session_dialog_token, DPP_STATUS_CONFIGURATION_FAILURE);
+        auto tmp = create_config_response_frame(src_mac, src_al_mac, session_dialog_token, DPP_STATUS_CONFIGURATION_FAILURE);
+        auto config_response_frame = tmp.first;
+        auto config_response_frame_len = tmp.second;
         std::string status_code_str =  ec_util::status_code_to_string(DPP_STATUS_CONFIGURATION_FAILURE);
 
-        auto [encap_response_frame, encap_response_frame_len] = ec_util::create_encap_dpp_tlv(true, src_mac, ec_frame_type_easymesh, reinterpret_cast<uint8_t*>(config_response_frame), config_response_frame_len);
+        auto tmp2 = ec_util::create_encap_dpp_tlv(true, src_mac, ec_frame_type_easymesh, reinterpret_cast<uint8_t*>(config_response_frame), config_response_frame_len);
+        auto encap_response_frame = tmp2.first;
+        auto encap_response_frame_len = tmp2.second;
         ASSERT_NOT_NULL(encap_response_frame, {}, "%s:%d: Failed to alloc DPP Configuration frame!\n", __func__, __LINE__);
 
         em_printfout("Sending DPP Configuration Response frame for Enrollee '" MACSTRFMT "' over 1905 with DPP status code %s", MAC2STR(src_mac), status_code_str.c_str());
@@ -681,13 +703,17 @@ bool ec_ctrl_configurator_t::handle_proxied_dpp_configuration_request(uint8_t *e
         "Credentials."
     );
     */
-    auto [config_response_frame, config_response_frame_len] = create_config_response_frame(src_mac, src_al_mac, session_dialog_token, DPP_STATUS_OK, onboarding_sta_device);
+    auto tmp1 = create_config_response_frame(src_mac, src_al_mac, session_dialog_token, DPP_STATUS_OK, onboarding_sta_device);
+    auto config_response_frame = tmp1.first;
+    auto config_response_frame_len = tmp1.second;
     if (config_response_frame == nullptr || config_response_frame_len == 0) {
         em_printfout("Failed to create Configuration Respone frame");
         return false;
     }
 
-    auto [encap_response_frame, encap_response_frame_len] = ec_util::create_encap_dpp_tlv(true, src_mac, ec_frame_type_easymesh, config_response_frame, config_response_frame_len);
+    auto tmp2 = ec_util::create_encap_dpp_tlv(true, src_mac, ec_frame_type_easymesh, config_response_frame, config_response_frame_len);
+    auto encap_response_frame = tmp2.first;
+    auto encap_response_frame_len = tmp2.second;
     ASSERT_NOT_NULL_FREE(encap_response_frame, {}, config_response_frame, "%s:%d: Failed to alloc DPP Configuration frame!\n", __func__, __LINE__);
 
     bool did_succeed = false;
@@ -739,7 +765,9 @@ bool ec_ctrl_configurator_t::handle_auth_response(ec_frame_t *frame, size_t len,
 
         // Unwrap the wrapped data with the K1 key
 
-        auto [unwrapped_data, unwrapped_data_len] =  ec_util::unwrap_wrapped_attrib(*prim_wrapped_attr, frame, true, e_ctx->k1);
+        auto tmp = ec_util::unwrap_wrapped_attrib(*prim_wrapped_attr, frame, true, e_ctx->k1);
+        auto unwrapped_data = tmp.first;
+        auto unwrapped_data_len = tmp.second;
         if (unwrapped_data == NULL || unwrapped_data_len == 0) {
             em_printfout("Failed to unwrap wrapped data");
             // Abort the exchange
@@ -768,7 +796,7 @@ bool ec_ctrl_configurator_t::handle_auth_response(ec_frame_t *frame, size_t len,
 
     // Initiator Bootstrapping Key Hash is present, allow mutual auth.
     auto B_i_hash_attr = ec_util::get_attrib(frame->attributes, attrs_len, ec_attrib_id_init_bootstrap_key_hash);
-    e_ctx->is_mutual_auth = B_i_hash_attr.has_value(); // If the attribute is present, mutual authentication is possible
+    e_ctx->is_mutual_auth = static_cast<bool>(B_i_hash_attr); // If the attribute is present, mutual authentication is possible
 
     auto P_r_attr = ec_util::get_attrib(frame->attributes, attrs_len, ec_attrib_id_resp_proto_key);
     ASSERT_OPT_HAS_VALUE(P_r_attr, false, "%s:%d: No Responder Public Protocol Key attribute found\n", __func__, __LINE__);
@@ -792,7 +820,9 @@ bool ec_ctrl_configurator_t::handle_auth_response(ec_frame_t *frame, size_t len,
     util::print_hex_dump(conn_ctx->digest_len, e_ctx->k2);
 
     // Unwrap the wrapped data with the K2 key
-    auto [prim_unwrapped_data, prim_unwrapped_len] =  ec_util::unwrap_wrapped_attrib(*prim_wrapped_attr, frame, true, e_ctx->k2);
+    auto tmp = ec_util::unwrap_wrapped_attrib(*prim_wrapped_attr, frame, true, e_ctx->k2);
+    auto prim_unwrapped_data = tmp.first;
+    auto prim_unwrapped_len = tmp.second;
     if (prim_unwrapped_data == NULL || prim_unwrapped_len == 0) {
         em_printfout("Failed to unwrap wrapped data");
         // Abort the exchange
@@ -839,10 +869,14 @@ bool ec_ctrl_configurator_t::handle_auth_response(ec_frame_t *frame, size_t len,
         em_printfout("Responder capabilities not supported");
         free(prim_unwrapped_data);
 
-        auto [resp_frame, resp_len] = create_auth_confirm(enrollee_mac, DPP_STATUS_NOT_COMPATIBLE, NULL);
+        auto tmp = create_auth_confirm(enrollee_mac, DPP_STATUS_NOT_COMPATIBLE, NULL);
+        auto resp_frame = tmp.first;
+        auto resp_len = tmp.second;
         ASSERT_NOT_NULL(resp_frame, false, "%s:%d: Failed to create response frame\n", __func__, __LINE__);
 
-        auto [encap_dpp_tlv, encap_dpp_size] = ec_util::create_encap_dpp_tlv(0, src_mac, ec_frame_type_auth_cnf, resp_frame, resp_len);
+        auto tmp2 = ec_util::create_encap_dpp_tlv(0, src_mac, ec_frame_type_auth_cnf, resp_frame, resp_len);
+        auto encap_dpp_tlv = tmp2.first;
+        auto encap_dpp_size = tmp2.second;
         free(resp_frame);
         ASSERT_NOT_NULL(encap_dpp_tlv, false, "%s:%d: Failed to create Encap DPP TLV\n", __func__, __LINE__);
 
@@ -908,7 +942,9 @@ bool ec_ctrl_configurator_t::handle_auth_response(ec_frame_t *frame, size_t len,
     ASSERT_OPT_HAS_VALUE_FREE(sec_wrapped_attr, false, prim_unwrapped_data, "%s:%d: No secondary wrapped data attribute found\n", __func__, __LINE__);
 
     // Unwrap the secondary wrapped data with the KE key
-    auto [sec_unwrapped_data, sec_unwrapped_len] =  ec_util::unwrap_wrapped_attrib(*sec_wrapped_attr, frame, false, e_ctx->ke);
+    auto tmp1 = ec_util::unwrap_wrapped_attrib(*sec_wrapped_attr, frame, false, e_ctx->ke);
+    auto sec_unwrapped_data = tmp1.first;
+    auto sec_unwrapped_len = tmp1.second;
     ASSERT_NOT_NULL_FREE(sec_unwrapped_data, false, prim_unwrapped_data, "%s:%d: Failed to unwrap secondary wrapped data\n", __func__, __LINE__);
 
     // Free the primary unwrapped data since it is no longer needed (secondary unwrapped data is heap allocated)
@@ -969,10 +1005,14 @@ bool ec_ctrl_configurator_t::handle_auth_response(ec_frame_t *frame, size_t len,
         The Initiator should generate an alert indicating its inability to authenticate the Responder. The Initiator then aborts the
         exchange.
         */
-        auto [resp_frame, resp_len] = create_auth_confirm(enrollee_mac, DPP_STATUS_AUTH_FAILURE, NULL);
+        auto tmp = create_auth_confirm(enrollee_mac, DPP_STATUS_AUTH_FAILURE, NULL);
+        auto resp_frame = tmp.first;
+        auto resp_len = tmp.second;
         ASSERT_NOT_NULL(resp_frame, false, "%s:%d: Failed to create response frame\n", __func__, __LINE__);
 
-        auto [encap_dpp_tlv, encap_dpp_size] = ec_util::create_encap_dpp_tlv(0, src_mac, ec_frame_type_auth_cnf, resp_frame, resp_len);
+        auto tmp2 = ec_util::create_encap_dpp_tlv(0, src_mac, ec_frame_type_auth_cnf, resp_frame, resp_len);
+        auto encap_dpp_tlv = tmp2.first;
+        auto encap_dpp_size = tmp2.second;
         free(resp_frame);
         ASSERT_NOT_NULL(encap_dpp_tlv, false, "%s:%d: Failed to create Encap DPP TLV\n", __func__, __LINE__);
 
@@ -1006,11 +1046,15 @@ bool ec_ctrl_configurator_t::handle_auth_response(ec_frame_t *frame, size_t len,
     uint8_t* i_auth = ec_crypto::compute_hash(*conn_ctx, i_auth_hb);
     ASSERT_NOT_NULL(i_auth, false, "%s:%d: Failed to compute I-auth\n", __func__, __LINE__);
 
-    auto [resp_frame, resp_len] = create_auth_confirm(enrollee_mac, DPP_STATUS_OK, i_auth);
+    auto resp = create_auth_confirm(enrollee_mac, DPP_STATUS_OK, i_auth);
+    auto resp_frame = resp.first;
+    auto resp_len = resp.second;
     free(i_auth);
     ASSERT_NOT_NULL(resp_frame, false, "%s:%d: Failed to create response frame\n", __func__, __LINE__);
 
-    auto [encap_dpp_tlv, encap_dpp_size] = ec_util::create_encap_dpp_tlv(0, src_mac, ec_frame_type_auth_cnf, resp_frame, resp_len);
+    auto tmp2 = ec_util::create_encap_dpp_tlv(0, src_mac, ec_frame_type_auth_cnf, resp_frame, resp_len);
+    auto encap_dpp_tlv = tmp2.first;
+    auto encap_dpp_size = tmp2.second;
     free(resp_frame);
     ASSERT_NOT_NULL(encap_dpp_tlv, false, "%s:%d: Failed to create Encap DPP TLV\n", __func__, __LINE__);
 
@@ -1099,10 +1143,14 @@ bool ec_ctrl_configurator_t::handle_recfg_announcement(ec_frame_t *encap_frame, 
         return true;
     }
 
-    auto [recfg_auth_req_frame, recfg_auth_req_frame_len] = create_recfg_auth_request(enrollee_mac, fc_nid);
+    auto tmp = create_recfg_auth_request(enrollee_mac, fc_nid);
+    auto recfg_auth_req_frame = tmp.first;
+    auto recfg_auth_req_frame_len = tmp.second;
     ASSERT_NOT_NULL(recfg_auth_req_frame, false, "%s:%d: Failed to create Reconfiguration Authentication Request frame\n", __func__, __LINE__);
 
-    auto [encap_dpp_tlv, encap_dpp_tlv_len] = ec_util::create_encap_dpp_tlv(0, sa, ec_frame_type_recfg_auth_req, recfg_auth_req_frame, recfg_auth_req_frame_len);
+    auto tmp2 = ec_util::create_encap_dpp_tlv(0, sa, ec_frame_type_recfg_auth_req, recfg_auth_req_frame, recfg_auth_req_frame_len);
+    auto encap_dpp_tlv = tmp2.first;
+    auto encap_dpp_tlv_len = tmp2.second;
     ASSERT_NOT_NULL_FREE(encap_dpp_tlv, false, recfg_auth_req_frame, "%s:%d: Failed to create Encap DPP TLV\n", __func__, __LINE__);
 
     bool sent = m_send_prox_encap_dpp_msg(encap_dpp_tlv, encap_dpp_tlv_len, nullptr, 0, src_al_mac);
@@ -1234,7 +1282,9 @@ bool ec_ctrl_configurator_t::handle_recfg_auth_response(ec_frame_t *frame, size_
     // The Configurator shall set the value of DPP Status field to STATUS_AUTH_FAILURE if one or more of the above checks
     // did not pass successfully.
     ec_status_code_t dpp_status = DPP_STATUS_OK;
-    auto [wrapped_data, wrapped_data_len] = ec_util::unwrap_wrapped_attrib(*wrapped_data_attr, frame, true, e_ctx->ke);
+    auto tmp = ec_util::unwrap_wrapped_attrib(*wrapped_data_attr, frame, true, e_ctx->ke);
+    auto wrapped_data = tmp.first;
+    auto wrapped_data_len = tmp.second;
     if (wrapped_data == nullptr || wrapped_data_len == 0) {
         em_printfout("Failed to unwrap wrapped data in Reconfiguration Authentication Response frame using new ke");
         dpp_status = DPP_STATUS_AUTH_FAILURE;
@@ -1242,7 +1292,7 @@ bool ec_ctrl_configurator_t::handle_recfg_auth_response(ec_frame_t *frame, size_
 
     if (wrapped_data) {
         auto c_nonce_attr = ec_util::get_attrib(wrapped_data, wrapped_data_len, ec_attrib_id_config_nonce);
-        if (!c_nonce_attr.has_value()) {
+        if (!c_nonce_attr) {
             em_printfout("No C-Nonce attribute found in wrapped data of Reconfiguration Authentication Response frame");
             dpp_status = DPP_STATUS_AUTH_FAILURE;
         } else if (memcmp(e_ctx->c_nonce, c_nonce_attr->data, c_nonce_attr->length) != 0) {
@@ -1260,7 +1310,7 @@ bool ec_ctrl_configurator_t::handle_recfg_auth_response(ec_frame_t *frame, size_
     // Note: spec does not specify **how** to use the Conn Status object to set the Reconfig Flags attr,
     // so assume STATUS_OK == REUSE, != STATUS_OK == REPLACE
     auto conn_status_attr = ec_util::get_attrib(wrapped_data, wrapped_data_len, ec_attrib_id_conn_status);
-    if (!conn_status_attr.has_value()) {
+    if (!conn_status_attr) {
         em_printfout("Connection Status Result attribute missing from Reconfiguration Authentication Response frame, assuming Enrollee DPP STATUS != STATUS_OK");
         dpp_status = DPP_STATUS_AUTH_FAILURE;
         enrollee_status = DPP_STATUS_AUTH_FAILURE;
@@ -1271,7 +1321,9 @@ bool ec_ctrl_configurator_t::handle_recfg_auth_response(ec_frame_t *frame, size_
     if (status != nullptr && cJSON_IsNumber(status)) dpp_status = static_cast<ec_status_code_t>(status->valueint);
 
 
-    auto [auth_confirm_frame, auth_confirm_frame_len] = create_recfg_auth_confirm(enrollee_mac, dpp_status, enrollee_status, static_cast<uint8_t>(trans_id_attr->data[0]));
+    auto tmp1 = create_recfg_auth_confirm(enrollee_mac, dpp_status, enrollee_status, static_cast<uint8_t>(trans_id_attr->data[0]));
+    auto auth_confirm_frame = tmp1.first;
+    auto auth_confirm_frame_len = tmp1.second;
     if (auth_confirm_frame == nullptr || auth_confirm_frame_len == 0) {
         em_printfout("Failed to create Reconfiguration Authentication Confirm frame");
         if (wrapped_data) free(wrapped_data);
@@ -1314,7 +1366,9 @@ std::pair<uint8_t *, size_t> ec_ctrl_configurator_t::create_auth_request(std::st
     util::print_hex_dump(conn_ctx->nonce_len, e_ctx->i_nonce);
 
     // Generate initiator protocol key pair (p_i/P_I)
-    auto [priv_init_proto_key, pub_init_proto_key] = ec_crypto::generate_proto_keypair(*conn_ctx);
+    auto tmp1 = ec_crypto::generate_proto_keypair(*conn_ctx);
+    auto priv_init_proto_key = tmp1.first;
+    auto pub_init_proto_key = tmp1.second;
     if (priv_init_proto_key == NULL || pub_init_proto_key == NULL) {
         em_printfout("failed to generate initiator protocol key pair");
         free(frame);
@@ -1692,7 +1746,9 @@ std::pair<uint8_t *, size_t> ec_ctrl_configurator_t::create_config_response_fram
     ASSERT_NOT_NULL(e_ctx, {}, "%s:%d: No ephemeral context found for Enrollee '" MACSTRFMT "'\n", __func__, __LINE__, MAC2STR(enrollee_mac.c_str()));
 
     if (dpp_status != DPP_STATUS_OK) {
-        auto [frame, frame_len] = ec_util::alloc_gas_frame(dpp_gas_action_type_t::dpp_gas_initial_resp, dialog_token);
+        auto tmp1 = ec_util::alloc_gas_frame(dpp_gas_action_type_t::dpp_gas_initial_resp, dialog_token);
+        auto frame = tmp1.first;
+        auto frame_len = tmp1.second;
         if (frame == nullptr || frame_len == 0) {
             em_printfout("Failed to create DPP Configuration Response frame!");
             return {};
@@ -1776,7 +1832,9 @@ std::pair<uint8_t *, size_t> ec_ctrl_configurator_t::create_config_response_fram
 
 
     // Create DPP Configuration frame.
-    auto [frame, frame_len] = ec_util::alloc_gas_frame(dpp_gas_action_type_t::dpp_gas_initial_resp, dialog_token);
+    auto tmp1 = ec_util::alloc_gas_frame(dpp_gas_action_type_t::dpp_gas_initial_resp, dialog_token);
+    auto frame = tmp1.first;
+    auto frame_len = tmp1.second;
     ASSERT_NOT_NULL(frame, {}, "%s:%d: Could not allocate DPP Configuration Response frame!\n", __func__, __LINE__);
     ec_gas_initial_response_frame_t *response_frame = reinterpret_cast<ec_gas_initial_response_frame_t *>(frame);
 
@@ -1815,7 +1873,9 @@ std::optional<std::pair<std::string, ec_connection_context_t *>> ec_ctrl_configu
     ec_connection_context_t *e_conn_ctx = nullptr;
     std::string enroleee_phy_mac = "";
 
-    for (auto & [mac, conn_ctx] : m_connections) {
+    for (auto & mac_ctx : m_connections) {
+auto mac = mac_ctx.first;
+auto conn_ctx = mac_ctx.second;
 
         em_printfout("Checking connection context for Enrollee '%s'", mac.c_str());
         // We found the connection context for this Enrollee
