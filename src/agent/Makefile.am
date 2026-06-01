@@ -19,6 +19,8 @@
 AM_CFLAGS = -D_ANSC_LINUX
 AM_CFLAGS += -D_ANSC_USER
 AM_CFLAGS += -D_ANSC_LITTLE_ENDIAN_
+AM_CFLAGS += -fPIC -fPIE
+AM_CXXFLAGS = -fPIC -fPIE
 
 ACLOCAL_AMFLAGS = -I m4
 hardware_platform = i686-linux-gnu
@@ -33,7 +35,7 @@ onewifi_em_agent_CPPFLAGS = \
     -I$(top_srcdir)/src/util \
     -I$(top_srcdir)/src/util_crypto
 
-onewifi_em_agent_CXXFLAGS = $(INCLUDEDIRS) -g -Wall -Wextra -pedantic -Wpedantic -Wpointer-arith -Wcast-qual -Wcast-align -Wstrict-aliasing -fno-common -Wctor-dtor-privacy -Wold-style-cast -Woverloaded-virtual -Wsign-promo -Wstrict-null-sentinel -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE -pie -ftrapv -Wformat=2 -Wformat-security -Wuninitialized -Winit-self -Wsign-conversion -Weffc++ -Wno-unused-parameter -fno-omit-frame-pointer #-Wconversion -Werror -O2
+onewifi_em_agent_CXXFLAGS = $(INCLUDEDIRS) -g -Wall -Wextra -pedantic -Wpedantic -Wpointer-arith -Wcast-qual -Wcast-align -Wstrict-aliasing -fno-common -fPIC -Wctor-dtor-privacy -Wold-style-cast -Woverloaded-virtual -Wsign-promo -Wstrict-null-sentinel -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE -pie -ftrapv -Wformat=2 -Wformat-security -Wuninitialized -Winit-self -Wsign-conversion -Weffc++ -Wno-unused-parameter -fno-omit-frame-pointer #-Wconversion -Werror -O2
 if EM_ASAN_AGENT
 onewifi_em_agent_CXXFLAGS += -fsanitize=address -fsanitize=undefined
 endif
