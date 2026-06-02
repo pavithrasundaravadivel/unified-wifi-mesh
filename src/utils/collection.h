@@ -18,55 +18,59 @@
 **************************************************************************/
 
 #ifndef _COLLECTION_H_
-#define _COLLECTION_H_
-
+#define	_COLLECTION_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <stdbool.h>
 #include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 
-typedef struct elements {
-    void *data;
-    struct elements *next;
+#define HASH_MAP_MAX_KEY_SIZE   100
+
+typedef struct element_t {
+    void     *data;
+    struct element_t *next;    
 } element_t;
 
 typedef struct {
-    void *data;
-    char *key;
+    void    *data;
+    char    *key;
 } hash_element_t;
 
 typedef struct {
-    element_t *head;
+    element_t    *head;
+    uint32_t count;
 } queue_t;
 
 typedef struct {
     queue_t *queue;
+    element_t    *itr;
 } hash_map_t;
 
 // queue operations
-queue_t *queue_create(void);
-void queue_destroy(queue_t *q);
-int8_t queue_push(queue_t *q, void *data);
-void *queue_pop(queue_t *q);
-void *queue_remove(queue_t *q, uint32_t n);
-void *queue_peek(queue_t *q, uint32_t n);
-uint32_t queue_count(queue_t *q);
-
+queue_t     *queue_create    (void);
+void        queue_destroy    (queue_t *q);
+int8_t        queue_push        (queue_t *q, void *data);
+void        *queue_pop        (queue_t *q);
+void        *queue_remove      (queue_t *q, uint32_t n);
+void        *queue_peek     (queue_t *q, uint32_t n);
+uint32_t     queue_count        (queue_t *q);
 // hash map operations, currently hash map is flat there are no buckets
-hash_map_t *hash_map_create(void);
-void hash_map_destroy(hash_map_t *map);
-int8_t hash_map_put(hash_map_t *map, char *key, void *data);
-void *hash_map_get(hash_map_t *map, const char *key);
-void *hash_map_remove(hash_map_t *map, const char *key);
-uint32_t hash_map_count(hash_map_t *map);
+hash_map_t     *hash_map_create    (void);
+void         hash_map_destroy    (hash_map_t *map);
+void         hash_map_cleanup    (hash_map_t *map);
+int8_t         hash_map_put    (hash_map_t *map, char *key, void *data);
+void         *hash_map_get    (hash_map_t *map, const char *key);
+void        *hash_map_remove (hash_map_t *map, const char *key);
+uint32_t     hash_map_count    (hash_map_t *map);
 
-void *hash_map_get_first(hash_map_t *map);
-void *hash_map_get_next(hash_map_t *map, void *data);
+void     *hash_map_get_first    (hash_map_t *map);
+void     *hash_map_get_next    (hash_map_t *map, void *data);
+hash_map_t *hash_map_clone (hash_map_t *src_map, size_t data_size);
 
 #ifdef __cplusplus
 }
 #endif
-
 #endif // _COLLECTION_H_
