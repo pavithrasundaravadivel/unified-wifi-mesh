@@ -43,17 +43,18 @@
  * | 02 | Call deserializeRegistrationResponse with valid data | validData | None | Should Pass |
  */
 TEST(AlServiceRegistrationResponseTest, DeserializeWithValidData) {
-    std::vector<unsigned char> validData = {
-        0xAA, 0xBB, 0xCC, 0xDD,
-        0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E,
-        0x01
-    };
-    std::cout << "Entering DeserializeWithValidData test" << std::endl;
+    constexpr size_t totalSize =
+	sizeof(uint32_t) +
+	sizeof(MacAddress) +
+	sizeof(uint8_t);
+    std::vector<unsigned char> validData(totalSize, 0x00);
+
+    // Optional: put a SUCCESS result in last byte
+    // validData[totalSize - 1] = 0x01;
     AlServiceRegistrationResponse instance;
     EXPECT_NO_THROW({
         instance.deserializeRegistrationResponse(validData);
     });
-    std::cout << "Exiting DeserializeWithValidData test" << std::endl;
 }
 
 /**

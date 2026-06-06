@@ -136,10 +136,6 @@ protected:
         if (skip_teardown) {
             return;
         }
-        list.delete_data_model("Network1", mac1);
-	    list.delete_data_model("Network1", mac2);
-	    list.delete_data_model("Network2", mac3);
-	    list.delete_data_model("Network2", mac4);
 
         if (dm1->m_wifi_data != NULL) {
             free(dm1->m_wifi_data);
@@ -157,6 +153,14 @@ protected:
             free(dm4->m_wifi_data);
             dm4->m_wifi_data = nullptr;
         }
+	list.delete_data_model("Network1", mac1);
+	    list.delete_data_model("Network1", mac2);
+	    list.delete_data_model("Network2", mac3);
+	    list.delete_data_model("Network2", mac4);
+		dm1 = nullptr;
+        dm2 = nullptr;
+        dm3 = nullptr;
+        dm4 = nullptr;
 	__lsan_enable();
     }
 };
