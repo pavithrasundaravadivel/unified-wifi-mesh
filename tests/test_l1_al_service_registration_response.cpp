@@ -52,6 +52,7 @@ TEST(AlServiceRegistrationResponseTest, DeserializeWithValidData) {
     // Optional: put a SUCCESS result in last byte
     // validData[totalSize - 1] = 0x01;
     AlServiceRegistrationResponse instance;
+
     EXPECT_NO_THROW({
         instance.deserializeRegistrationResponse(validData);
     });
@@ -106,11 +107,12 @@ TEST(AlServiceRegistrationResponseTest, DeserializeWithNullData) {
  */
 TEST(AlServiceRegistrationResponseTest, RetrieveAlMacAddressLocalWithValidInput) {
     std::cout << "Entering RetrieveAlMacAddressLocalWithValidInput test" << std::endl;
-	AlServiceRegistrationResponse instance(parseMacAddress("00:1A:2B:3C:4D:5E"), RegistrationResult::SUCCESS);
+    AlServiceRegistrationResponse instance(parseMacAddress("00:1A:2B:3C:4D:5E"), RegistrationResult::SUCCESS);
     MacAddress result = instance.getAlMacAddressLocal();
-	std::cout << "The result is " << result << std::endl;
+    std::cout << "The result is " << result << std::endl;
     std::cout << "Exiting RetrieveAlMacAddressLocalWithValidInput test" << std::endl;
 }
+
 
 /**
  * @brief Test the retrieval of AL MAC address with empty input

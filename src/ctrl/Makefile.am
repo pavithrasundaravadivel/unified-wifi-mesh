@@ -223,7 +223,7 @@ onewifi_em_ctrl_test_SOURCES = $(onewifi_em_ctrl_SOURCES) \
 	$(top_srcdir)/tests/test_l1_em_dev_test_ctrl.cpp \
 	$(top_srcdir)/src/al-sap/al_service_utils.cpp \
 	$(top_srcdir)/tests/test_l1_al_service_utils.cpp \
-	$(top_srcdir)/tests/test_l1_cjson_util.cpp \	
+	$(top_srcdir)/tests/test_l1_cjson_util.cpp \
 	$(top_srcdir)/tests/test_l1_em_msg.cpp \
 	$(top_srcdir)/tests/test_l1_timer.cpp \
 	$(top_srcdir)/tests/test_l1_util.cpp \
