@@ -175,7 +175,11 @@ void em_t::orch_execute(em_cmd_t *pcmd)
             m_sm.set_state(em_state_agent_onewifi_bssconfig_ind);
             break;
         case em_cmd_type_sta_assoc:
-            if ((pcmd->get_orch_op() == dm_orch_type_topo_publish) && (m_sm.get_state() == em_state_ctrl_configured)) {
+            if ((pcmd->get_orch_op() == dm_orch_type_topo_sync) && (m_sm.get_state() == em_state_ctrl_configured)) {
+                m_sm.set_state(em_state_ctrl_topo_sync_pending);
+            } else if ((pcmd->get_orch_op() == dm_orch_type_sta_cap) && (m_sm.get_state() == em_state_ctrl_configured)) {
+                m_sm.set_state(em_state_ctrl_sta_cap_pending);
+            } else if (pcmd->get_orch_op() == dm_orch_type_topo_publish) {
                 m_sm.set_state(em_state_ctrl_topo_publish_pending);
             } else {
                 m_sm.set_state(em_state_ctrl_sta_cap_pending);
@@ -220,7 +224,7 @@ void em_t::orch_execute(em_cmd_t *pcmd)
             break;
 
 		case em_cmd_type_set_policy:
-            set_state(em_state_ctrl_set_policy_pending);
+            m_sm.set_state(em_state_ctrl_set_policy_pending);
             break;
 
         case em_cmd_type_avail_spectrum_inquiry:
@@ -287,6 +291,7 @@ void em_t::proto_process(unsigned char *data, unsigned int len)
         case em_msg_type_topo_resp:
         case em_msg_type_topo_query:
         case em_msg_type_topo_notif:
+        case em_msg_type_failed_conn:
         case em_msg_type_ap_mld_config_req:
         case em_msg_type_ap_mld_config_resp:
         case em_msg_type_bss_config_req:
@@ -378,6 +383,21 @@ void em_t::proto_process(em_cmd_event_t *cevt)
             em_metrics_t::process_agent_state(em_cmd_event_type_ap_metrics_report);
             delete ap_cmd;
             m_cmd = saved_cmd;
+            break;
+        }
+        case em_cmd_event_type_failed_connection:
+        {
+            em_connection_status_evt_data_t *failed_conn_evt =
+                static_cast<em_connection_status_evt_data_t *>(cevt->cmd_ptr);
+
+            if (failed_conn_evt != NULL) {
+                handle_failed_connection_event(failed_conn_evt->sta_mac, failed_conn_evt->bssid,
+                                               failed_conn_evt->status_code,
+                                               failed_conn_evt->reason_code,
+                                               failed_conn_evt->reason_code_present);
+                free(failed_conn_evt);
+                cevt->cmd_ptr = NULL;
+            }
             break;
         }
         default:
@@ -1721,6 +1741,181 @@ unsigned short em_t::create_eht_operations_tlv(unsigned char *buff)
     }
 
     return len;
+}
+
+unsigned short em_t::create_traffic_separation_policy_tlv(unsigned char *buff)
+{
+    unsigned short len = 0;
+    unsigned int i;
+    dm_easy_mesh_t *dm = get_data_model();
+    dm_network_ssid_t *net_ssid;
+    unsigned char *tmp = buff;
+
+    // get total ssid count
+    unsigned char ssids_num = dm->get_num_network_ssid();
+    *tmp = static_cast<unsigned char>(ssids_num);
+    tmp += sizeof(unsigned char);
+    len += sizeof(unsigned char);
+
+    for (i = 0; i < ssids_num; i++) {
+        net_ssid = dm->get_network_ssid(i);
+
+        std::vector<unsigned char> ssid_bytes(net_ssid->m_network_ssid_info.ssid, 
+                    net_ssid->m_network_ssid_info.ssid + strlen(net_ssid->m_network_ssid_info.ssid));
+        unsigned char ssid_len = static_cast<unsigned char>(ssid_bytes.size());
+
+        *tmp = ssid_len;
+        tmp += sizeof(unsigned char);
+        len += sizeof(unsigned char);
+
+        memcpy(tmp, ssid_bytes.data(), ssid_len);
+        tmp += ssid_len;
+        len += ssid_len;
+
+        unsigned short vlan_n = htons(net_ssid->m_network_ssid_info.vlan_id);
+        memcpy(tmp, &vlan_n, sizeof(vlan_n));
+        tmp += sizeof(unsigned short);
+        len += sizeof(unsigned short);
+	    em_printfout(" TRAFFIC SEPARATION SSID='%.*s' Len=%u, VLAN=%u ",ssid_len,ssid_bytes.data(), ssid_len, net_ssid->m_network_ssid_info.vlan_id);
+    }
+    em_printfout("Length: %d ", len);
+    return len;
+}
+
+short em_t::create_def_8021q_settings_policy_tlv(unsigned char *buff)
+{
+    size_t len = 0;
+    dm_easy_mesh_t *dm;
+    unsigned int i;
+
+    if (get_current_cmd()->get_type() == em_cmd_type_set_policy) {
+        dm = get_current_cmd()->get_data_model();
+    } else {
+        dm = get_data_model();
+    }
+
+    for (i = 0; i < dm->get_num_policy(); i++) {
+        dm_policy_t *policy = &dm->m_policy[i];
+        if (policy->m_policy.id.type != em_policy_id_type_default_8021q_settings) {
+            continue;
+        }
+        em_8021q_settings_t *settings = reinterpret_cast<em_8021q_settings_t *>(buff);
+        settings->primary_vlan_id = htons(policy->m_policy.def_8021q_settings.primary_vid);
+        settings->default_pcp = policy->m_policy.def_8021q_settings.default_pcp & 0x07;
+        settings->reserved = 0;
+        em_printfout("Found Default 802.1Q Settings Policy in DM with primary_vid=%u, default_pcp=%u",
+            policy->m_policy.def_8021q_settings.primary_vid,
+            policy->m_policy.def_8021q_settings.default_pcp);
+        len += sizeof(em_8021q_settings_t);
+        break;
+    }
+
+    return static_cast<short>(len);
+}
+
+int em_t::handle_eht_operations_tlv(unsigned char *buff, unsigned short tlv_len)
+{
+    short len = 0;
+    unsigned int i = 0, j = 0, k = 0, l = 0;
+    unsigned char *tmp = buff;
+    unsigned char num_radios;
+    unsigned char num_bss = 0;
+    em_eht_operations_t eht_ops;
+    dm_easy_mesh_t *dm;
+
+    dm = get_data_model();
+
+    // 32 octets are reserved for future use, so skip 32 octets
+    short reserved_octets = 32;
+    if (tlv_len < reserved_octets + static_cast<short>(sizeof(unsigned char))) {
+        em_printfout("EHT operations TLV too short for reserved + num_radios (len=%u)", tlv_len);
+        return -1;
+    }
+    tmp += reserved_octets;
+    len += reserved_octets;
+
+    memcpy(&num_radios, tmp, sizeof(unsigned char));
+
+    if (num_radios > EM_MAX_RADIO_PER_AGENT) {
+        em_printfout("Invalid num_radios=%d, max allowed=%d", num_radios, EM_MAX_RADIO_PER_AGENT);
+        return -1;
+    }
+
+    eht_ops.radios_num = num_radios;
+    tmp += sizeof(unsigned char);
+    len += static_cast<short> (sizeof(unsigned char));
+
+    for (i = 0; i < num_radios; i++) {
+        if (len + static_cast<short>(sizeof(mac_address_t) + sizeof(unsigned char)) > tlv_len) {
+            em_printfout("EHT operations TLV truncated at radio %u (len=%u, need=%d)", i, tlv_len, len);
+            return -1;
+        }
+        memcpy(&eht_ops.radios[i].ruid, tmp, sizeof(mac_address_t));
+        tmp += sizeof(mac_address_t);
+        len += static_cast<short> (sizeof(mac_address_t));
+
+        memcpy(&num_bss, tmp, sizeof(unsigned char));
+
+        if (num_bss > EM_MAX_BSS_PER_RADIO) {
+            em_printfout("Invalid num_bss=%d for radio %d, max allowed=%d", num_bss, i, EM_MAX_BSS_PER_RADIO);
+            return -1;
+        }
+
+        eht_ops.radios[i].bss_num = num_bss;
+        tmp += sizeof(unsigned char);
+        len += static_cast<short> (sizeof(unsigned char));
+
+        short bss_bytes = static_cast<short>(num_bss * sizeof(em_eht_operations_bss_t));
+        short radio_reserved_octets = 25;
+        if (len + bss_bytes + radio_reserved_octets > tlv_len) {
+            em_printfout("EHT operations TLV truncated at radio %u BSS data (len=%u, need=%d)", i, tlv_len, len + bss_bytes + radio_reserved_octets);
+            return -1;
+        }
+
+        for(j = 0; j < num_bss; j++) {
+            memcpy(&eht_ops.radios[i].bss[j], tmp, sizeof(em_eht_operations_bss_t));
+            tmp += sizeof(em_eht_operations_bss_t);
+            len += static_cast<short> (sizeof(em_eht_operations_bss_t));
+        }
+        // 25 octets are reserved for future use in radio, so skip 25 octets
+        tmp += radio_reserved_octets;
+        len += radio_reserved_octets;
+    }
+
+    bool found_radio = false;
+    bool found_bss = false;
+    for (i = 0; i < eht_ops.radios_num; i++) {
+        for (j = 0; j < dm->get_num_radios(); j++) {
+            if (memcmp(eht_ops.radios[i].ruid, dm->m_radio[j].m_radio_info.intf.mac, sizeof(mac_address_t)) == 0) {
+                found_radio = true;
+                break;
+            }
+        }
+        if (found_radio == false) {
+            em_printfout("Radio with RUID %s not found in data model",
+                util::mac_to_string(eht_ops.radios[i].ruid).c_str());
+            return -1;
+        }
+        found_radio = false;
+
+        for(k = 0; k < eht_ops.radios[i].bss_num; k++) {
+            for(l = 0; l < dm->get_num_bss(); l++) {
+                if (memcmp(eht_ops.radios[i].bss[k].bssid, dm->m_bss[l].m_bss_info.bssid.mac, sizeof(mac_address_t)) == 0) {
+                    found_bss = true;
+                    break;
+                }
+            }
+            if (found_bss == false) {
+                em_printfout("BSS with BSSID %s not found in data model",
+                    util::mac_to_string(eht_ops.radios[i].bss[k].bssid).c_str());
+                return -1;
+            }
+            found_bss = false;
+            memcpy(&dm->m_bss[l].get_bss_info()->eht_ops, &eht_ops.radios[i].bss[k], sizeof(em_eht_operations_bss_t));
+        }
+    }
+
+    return 0;
 }
 
 cJSON *em_t::create_enrollee_bsta_list(uint8_t pa_al_mac[ETH_ALEN])
