@@ -912,7 +912,18 @@ public:
 	 * @note Ensure that the buffer provided is large enough to hold the TLV structure.
 	 */
 	unsigned short create_eht_operations_tlv(unsigned char *buff);
-    
+   
+       /**!
+        * @brief Handles the EHT operations TLV.
+        *
+        * @param[in] buff Pointer to the buffer containing the TLV data.
+        *
+        * @returns int
+        * @retval 0 on success
+        * @retval -1 on failure
+        */
+        int handle_eht_operations_tlv(unsigned char *buff, unsigned short len);
+
 	/**!
 	 * @brief Creates a channel scan TLV.
 	 *
