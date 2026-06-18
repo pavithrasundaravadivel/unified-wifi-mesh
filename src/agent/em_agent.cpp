@@ -1354,27 +1354,27 @@ void em_agent_t::input_listener()
 
     if (desc->bus_event_subs_fn(&m_bus_hdl, "Device.WiFi.EM.STALinkMetricsReport", (void *)&em_agent_t::assoc_stats_cb, NULL, 0) != 0) {
         printf("%s:%d bus get failed\n", __func__, __LINE__);
-        return;
+//        return;
     }
 
     if (desc->bus_event_subs_fn(&m_bus_hdl, WIFI_EM_CHANNEL_SCAN_REPORT, (void *)&em_agent_t::channel_scan_cb, NULL, 0) != 0) {
         printf("%s:%d bus get failed\n", __func__, __LINE__);
-        return;
+  //      return;
     }
 
     if (desc->bus_event_subs_fn(&m_bus_hdl, "Device.WiFi.EM.BeaconReport", (void *)&em_agent_t::beacon_report_cb, NULL, 0) != 0) {
         printf("%s:%d bus get failed\n", __func__, __LINE__);
-        return;
+    //    return;
     }
 
     if (desc->bus_event_subs_fn(&m_bus_hdl, "Device.WiFi.EM.AssociationStatus", reinterpret_cast<void *>(&em_agent_t::association_status_cb), nullptr, 0) != 0) {
         em_printfout("Failed to subscribe to 'Device.WiFi.EM.AssociationStatus'");
-        return;
+      //  return;
     }
 
     if (desc->bus_event_subs_fn(&m_bus_hdl, "Device.WiFi.EM.ReportConnectionStatus", reinterpret_cast<void *>(&em_agent_t::connection_status_cb), nullptr, 0) != 0) {
         em_printfout("Error: Failed to subscribe to 'Device.WiFi.EM.ReportConnectionStatus'");
-        return;
+       // return;
     }
 
     if (desc->bus_event_subs_fn(&m_bus_hdl, "Device.WiFi.EC.BSSInfo", reinterpret_cast<void *>(&em_agent_t::bss_info_cb), nullptr, 0) != 0) {
@@ -1384,17 +1384,17 @@ void em_agent_t::input_listener()
 
     if (desc->bus_event_subs_fn(&m_bus_hdl, "Device.WiFi.EM.APMetricsReport", (void *)&em_agent_t::report_cb, NULL, 0) != 0) {
         printf("%s:%d bus get failed\n", __func__, __LINE__);
-        return;
+      //  return;
     }
 
     if (desc->bus_event_subs_fn(&m_bus_hdl,  WIFI_QUALITY_LINKREPORT, (void *)&em_agent_t::report_cb, NULL, 0) != 0) {
         printf("%s:%d bus get failed\n", __func__, __LINE__);
-        return;
+      //  return;
     }
 
    if(desc->bus_event_subs_fn(&m_bus_hdl, "Device.WiFi.CSABeaconFrameRecieved", (void *)&em_agent_t::mgmt_csa_beacon_frame_cb, NULL, 0) != 0) {
         printf("%s:%d bus get failed\n",__func__,__LINE__);
-        return;
+      //  return;
     }
 
     io(NULL);
