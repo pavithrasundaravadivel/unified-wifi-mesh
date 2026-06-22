@@ -5979,6 +5979,8 @@ void em_configuration_t::process_msg(unsigned char *data, unsigned int len)
             break;
 
         case em_msg_type_autoconf_resp:
+            printf("%s:%d Received autoconfig resp\n", __func__, __LINE__);
+            printf("service type is %d state is %d dpp is %d\n", get_service_type(), get_state(), get_is_dpp_onboarding());
             if (((get_service_type() == em_service_type_agent &&
                     get_state() == em_state_agent_autoconfig_rsp_pending) ||
                 (get_service_type() == em_service_type_agent && get_is_dpp_onboarding())) && get_state() != em_state_agent_1905_securing) {
