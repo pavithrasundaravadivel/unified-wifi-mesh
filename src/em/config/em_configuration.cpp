@@ -5981,14 +5981,15 @@ void em_configuration_t::process_msg(unsigned char *data, unsigned int len)
         case em_msg_type_autoconf_resp:
             printf("%s:%d Received autoconfig resp\n", __func__, __LINE__);
             printf("service type is %d state is %d dpp is %d\n", get_service_type(), get_state(), get_is_dpp_onboarding());
-            if (((get_service_type() == em_service_type_agent &&
+           /* if (((get_service_type() == em_service_type_agent &&
                     get_state() == em_state_agent_autoconfig_rsp_pending) ||
-                (get_service_type() == em_service_type_agent && get_is_dpp_onboarding())) && get_state() != em_state_agent_1905_securing) {
+                (get_service_type() == em_service_type_agent && get_is_dpp_onboarding())) && get_state() != em_state_agent_1905_securing) {*/
                 handle_autoconfig_resp(data, len);
-            }
+           // }
             break;
 
         case em_msg_type_autoconf_wsc:
+	    printf("%s:%d Received autoconfig wsc\n", __func__, __LINE__);
             if ((get_wsc_msg_type(tlvs, tlvs_len) == em_wsc_msg_type_m2) &&
                     (get_service_type() == em_service_type_agent) && (get_state() == em_state_agent_wsc_m2_pending)) {
                         printf("%s:%d: received wsc_m2 len:%d\n", __func__, __LINE__, len);
@@ -6002,12 +6003,14 @@ void em_configuration_t::process_msg(unsigned char *data, unsigned int len)
             break;
 
         case em_msg_type_autoconf_renew:
+	    printf("%s:%d Received autoconfig renew\n", __func__, __LINE__);
             if (get_service_type() == em_service_type_agent) {
                 handle_autoconfig_renew(data, len);
             }
             break;
 
         case em_msg_type_topo_query:
+	    printf("%s:%d Received topo query\n", __func__, __LINE__);
             {
                 int len = 0;
                 std::vector<em_t*> em_radios;
@@ -6032,6 +6035,7 @@ void em_configuration_t::process_msg(unsigned char *data, unsigned int len)
 			break;
 
         case em_msg_type_topo_resp:
+	    printf("%s:%d Received topo resp\n", __func__, __LINE__);
             if ((get_service_type() == em_service_type_ctrl) && (get_state() == em_state_ctrl_topo_sync_pending)){
                 if (handle_topology_response(data, len) == 0) {
                     set_state(em_state_ctrl_topo_synchronized);
@@ -6062,6 +6066,7 @@ void em_configuration_t::process_msg(unsigned char *data, unsigned int len)
             break;
 
         case em_msg_type_topo_notif:
+	    printf("%s:%d Received topo notification\n", __func__, __LINE__);
             if ((get_service_type() == em_service_type_ctrl) && (get_state() >= em_state_ctrl_topo_synchronized)) {
                 handle_topology_notification(data, len);
             }
