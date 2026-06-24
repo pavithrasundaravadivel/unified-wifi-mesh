@@ -4726,7 +4726,7 @@ int em_configuration_t::handle_encrypted_settings(unsigned int wsc_tlv_count)
     }
     if (get_mgr()->is_passive()) {
         em_printfout("Passive mode: skipping M2 configuration push to OneWifi");
-        set_state(em_state_agent_configured);
+        set_state(em_state_agent_wsc_m2_config_skipping);
     } else {
         get_mgr()->io_process(em_bus_event_type_m2ctrl_configuration, reinterpret_cast<unsigned char *> (&radioconfig), sizeof(radioconfig));
         set_state(em_state_agent_owconfig_pending);
@@ -6090,13 +6090,21 @@ void em_configuration_t::process_msg(unsigned char *data, unsigned int len)
                 int len = 0;
                 std::vector<em_t*> em_radios;
                 get_mgr()->get_all_em_for_al_mac(hdr->dst, em_radios);
-                /*for (auto &em : em_radios) {
-                    if ((em->get_service_type() == em_service_type_agent) && (em->get_state() < em_state_agent_onewifi_bssconfig_ind)) {
-                        em_printfout("radio %s is not configured, ignoring", util::mac_to_string(em->get_radio_interface_mac()).c_str());
-                        em_radios.clear();
-                        return;
+                for (auto &em : em_radios) {
+                    if(get_mgr()->is_passive() == true) {
+                        if ((em->get_service_type() == em_service_type_agent) && (em->get_state() == em_state_agent_wsc_m2_config_skipping)) {
+                            em_printfout("radio %s is skipping config, ignoring", util::mac_to_string(em->get_radio_interface_mac()).c_str());
+                            em_radios.clear();
+                            return;
+                        }
+                    } else {
+                        if ((em->get_service_type() == em_service_type_agent) && (em->get_state() < em_state_agent_onewifi_bssconfig_ind)) {
+                            em_printfout("radio %s is not configured, ignoring", util::mac_to_string(em->get_radio_interface_mac()).c_str());
+                            em_radios.clear();
+                            return;
+                        }
                     }
-                }*/
+                }
                 em_printfout("All radios are configured for al_mac:%s, sending topology response", util::mac_to_string(hdr->dst).c_str());
                 len = send_topology_response_msg(data, ntohs(cmdu->id));
                 if(len) {
