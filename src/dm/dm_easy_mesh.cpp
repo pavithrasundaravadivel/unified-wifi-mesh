@@ -2266,6 +2266,9 @@ void dm_easy_mesh_t::print_config()
         transmit_power_limit = m_radio[i].get_radio_info()->transmit_power_limit;
         em_printfout("Radio Mac: %s, Band: %d, TransmitPowerLimit: %d", util::mac_to_string(m_radio[i].get_radio_info()->intf.mac).c_str(),
             m_radio[i].get_radio_info()->band, transmit_power_limit);
+	//TODO workaround to get the ruid mac in next step
+	//same is done in src/agent/dm_easy_mesh_agent.cpp:399
+	memcpy(m_radio_cap[i].get_radio_cap_info()->ruid.mac, m_radio[i].get_radio_info()->intf.mac, sizeof(mac_address_t));
     }
 
     for(i = 0; i < m_num_radios; i++) {
