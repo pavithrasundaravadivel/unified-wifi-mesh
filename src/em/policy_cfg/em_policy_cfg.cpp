@@ -879,7 +879,11 @@ int em_policy_cfg_t::handle_policy_cfg_req(unsigned char *buff, unsigned int len
     // Save as baseline for next partial update.
     last_policy = policy;
 
-    get_mgr()->io_process(em_bus_event_type_set_policy, reinterpret_cast<unsigned char *> (&policy), sizeof(policy));
+    if (get_mgr()->is_passive()) {
+        em_printfout("Passive mode: skipping set policy configuration push to OneWifi");
+    } else {
+        get_mgr()->io_process(em_bus_event_type_set_policy, reinterpret_cast<unsigned char *> (&policy), sizeof(policy));
+    }
     send_1905_ack_message(ntohs(cmdu->id));
 
     return 0;
@@ -935,7 +939,7 @@ int em_policy_cfg_t::send_1905_ack_message(unsigned short msg_id)
 
     if (em_msg_t(em_msg_type_1905_ack, em_profile_type_3, buff, len).validate(errors) == 0) {
         em_printfout("1905 ACK validation failed\n");
-        return 0;
+        //return 0;
     }
 
     if (send_frame(buff, len)  < 0) {
