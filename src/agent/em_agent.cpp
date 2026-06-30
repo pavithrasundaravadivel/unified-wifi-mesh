@@ -1021,6 +1021,7 @@ void em_agent_t::handle_bus_event(em_bus_event_t *evt)
             break;
 
         case em_bus_event_type_sta_list:
+            em_printfout("Received handle sta event\n");
             handle_sta_list(evt);
             break;
 
@@ -1579,7 +1580,7 @@ int em_agent_t::assoc_stats_cb(char *event_name, bus_data_prop_t *data, void *us
 void em_agent_t::sta_cb(char *event_name, bus_data_prop_t *data, void *userData)
 {
     (void)userData;
-    //printf("%s:%d Recv data from onewifi:\r\n%s\r\n", __func__, __LINE__, (char *)data->value.raw_data.bytes);
+    em_printfout("%s:%d Recv data from onewifi:\r\n%s\r\n", __func__, __LINE__, (char *)data->value.raw_data.bytes);
     g_agent.io_process(em_bus_event_type_sta_list, (unsigned char *)data->value.raw_data.bytes, data->value.raw_data_len);
 
 }

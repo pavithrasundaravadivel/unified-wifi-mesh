@@ -126,6 +126,7 @@ int dm_easy_mesh_agent_t::analyze_sta_list(em_bus_event_t *evt, em_cmd_t *pcmd[]
     em_cmd_params_t *evt_param = NULL;
     mac_addr_str_t  sta_mac_str, bss_mac_str, radio_mac_str;
 
+    em_printfout("Entering %s\n", __func__);
     num_radios = get_num_radios();
     dm.init();
 
