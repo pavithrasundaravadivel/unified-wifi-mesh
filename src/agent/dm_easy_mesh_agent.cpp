@@ -142,8 +142,10 @@ int dm_easy_mesh_agent_t::analyze_sta_list(em_bus_event_t *evt, em_cmd_t *pcmd[]
         dm.m_bss[i] = m_bss[i];
     }
 
+    em_printfout("Entering %s %d\n", __func__, __LINE__);
     dm.translate_and_decode_onewifi_subdoc(reinterpret_cast<char *>(evt->u.raw_buff),
         webconfig_subdoc_type_associated_clients, "Assoc clients");
+    em_printfout("Entering %s %d\n", __func__, __LINE__);
 
     // Refresh global STA-MLD entries from the latest decoded snapshot.
     for (idx = 0; idx < dm.m_num_assoc_sta_mld; idx++) {
@@ -253,7 +255,7 @@ int dm_easy_mesh_agent_t::analyze_sta_list(em_bus_event_t *evt, em_cmd_t *pcmd[]
             num++;
         }
     }
-
+    em_printfout("Entering %s %d\n", __func__, __LINE__);
     return static_cast<int> (num);
 }
 
@@ -1159,7 +1161,8 @@ void dm_easy_mesh_agent_t::translate_and_decode_onewifi_subdoc(char *str, webcon
 {
     webconfig_t config;
     webconfig_external_easymesh_t extdata = {0};
-
+    
+    em_printfout("Entering %s %d\n", __func__, __LINE__);
     webconfig_proto_easymesh_init(&extdata, this, NULL, NULL, get_num_radios, set_num_radios,
         get_num_op_class, set_num_op_class, get_num_bss, set_num_bss,
         get_device_info, get_network_info, get_radio_info, get_ieee_1905_security_info, get_bss_info, get_op_class_info,
@@ -1173,10 +1176,12 @@ void dm_easy_mesh_agent_t::translate_and_decode_onewifi_subdoc(char *str, webcon
         em_printfout( "Init WiFi Web Config  fail");
         return;
     }
-
+    
+    em_printfout("Entering %s %d\n", __func__, __LINE__);
     if ((webconfig_easymesh_decode(&config, str, &extdata, &type)) != webconfig_error_none) {
         em_printfout("%s decode fail for type: %d", logname, (type));
     }
+    em_printfout("Entering %s %d\n", __func__, __LINE__);
 }
 
 int dm_easy_mesh_agent_t::refresh_onewifi_subdoc(wifi_bus_desc_t *desc, bus_handle_t *bus_hdl, const char* logname, webconfig_subdoc_type_t type, m2ctrl_radioconfig *m2_cfg, em_policy_cfg_params_t *policy_config)
