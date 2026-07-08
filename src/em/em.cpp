@@ -92,8 +92,10 @@ void em_t::orch_execute(em_cmd_t *pcmd)
 
     // now set the em state to start message exchages with peer
     cmd_type = pcmd->m_type;
+    em_printfout("cmd_type is %d\n", cmd_type);
     switch (cmd_type) {
         case em_cmd_type_sta_list:
+            em_printfout("Entering the sta_list to notify the topology\n");
             m_sm.set_state(em_state_agent_topology_notify);
 			break;
 

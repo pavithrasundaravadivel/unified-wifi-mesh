@@ -709,6 +709,7 @@ int em_configuration_t::send_topology_notification_by_client(mac_address_t sta, 
 
     dm = get_data_model();
 
+    em_printfout("Entering %s\n",__func__);
     memcpy(tmp, reinterpret_cast<unsigned char *> (multi_addr), sizeof(mac_address_t));
     tmp += sizeof(mac_address_t);
     len += static_cast<unsigned int> (sizeof(mac_address_t));
@@ -786,6 +787,7 @@ void em_configuration_t::handle_state_topology_notify()
 
     dm = get_current_cmd()->get_data_model();
 
+    em_printfout("Entering %s\n", __func__);
     sta = static_cast<dm_sta_t *>(hash_map_get_first(dm->m_sta_assoc_map));
     while (sta != NULL) {
         send_topology_notification_by_client(sta->m_sta_info.id, sta->m_sta_info.bssid, true);
@@ -6335,6 +6337,7 @@ void em_configuration_t::fill_media_data(em_media_spec_data_t *spec, dm_bss_t *b
 void em_configuration_t::process_agent_state()
 {
     switch (get_state()) {
+        em_printfout("Entering %s with state as %d\n", __func__, get_state());
         case em_state_agent_unconfigured:
         case em_state_agent_1905_unconfigured:
             handle_state_config_none();
@@ -6349,6 +6352,7 @@ void em_configuration_t::process_agent_state()
             break;
 
         case em_state_agent_topology_notify:
+            em_printfout("Entering the topology notify\n");
             handle_state_topology_notify();
             break;
 
