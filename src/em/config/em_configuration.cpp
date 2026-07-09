@@ -733,6 +733,7 @@ int em_configuration_t::send_topology_notification_by_client(mac_address_t sta, 
     tmp += sizeof(em_cmdu_t);
     len += static_cast<unsigned int> (sizeof(em_cmdu_t));
 
+    em_printfout("Entering %d\n",__LINE__);
     // AL MAC Address type TLV
     tlv = reinterpret_cast<em_tlv_t *> (tmp);
     tlv->type = em_tlv_type_al_mac_address;
@@ -741,7 +742,7 @@ int em_configuration_t::send_topology_notification_by_client(mac_address_t sta, 
 
     tmp += (sizeof (em_tlv_t) + sizeof(mac_address_t));
     len += static_cast<unsigned int> (sizeof (em_tlv_t) + sizeof(mac_address_t));
-
+    em_printfout("Entering %d\n",__LINE__);
     // Client Association Event  17.2.20
     tlv = reinterpret_cast<em_tlv_t *> (tmp);
     tlv->type = em_tlv_type_client_assoc_event;
@@ -750,7 +751,7 @@ int em_configuration_t::send_topology_notification_by_client(mac_address_t sta, 
 
     tmp += (sizeof(em_tlv_t) + sz);
     len += static_cast<unsigned int> (sizeof(em_tlv_t) + sz);
-
+    em_printfout("Entering %d\n",__LINE__);
     // End of message
     tlv = reinterpret_cast<em_tlv_t *> (tmp);
     tlv->type = em_tlv_type_eom;
@@ -759,7 +760,7 @@ int em_configuration_t::send_topology_notification_by_client(mac_address_t sta, 
     tmp += (sizeof (em_tlv_t));
     len += static_cast<unsigned int> (sizeof (em_tlv_t));
 
-    printf("%s:%d Create topology notification msg successful, len:%d\n", __func__, __LINE__, len);
+    em_printfout("%s:%d Create topology notification msg successful, len:%d\n", __func__, __LINE__, len);
 
     if (em_msg_t(em_msg_type_topo_notif, em_profile_type_3, buff, len).validate(errors) == 0) {
         printf("Topology notification msg validation failed\n");
@@ -772,7 +773,7 @@ int em_configuration_t::send_topology_notification_by_client(mac_address_t sta, 
         return -1;
     }
 
-    printf("%s:%d: Topology notification Send Successful\n", __func__, __LINE__);
+    em_printfout("%s:%d: Topology notification Send Successful\n", __func__, __LINE__);
 
     return static_cast<int> (len);
 }
