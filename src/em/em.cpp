@@ -1154,18 +1154,18 @@ short em_t::create_ap_radio_advanced_cap_tlv(unsigned char *buff)
 {
     short len = 0;
     dm_easy_mesh_t *dm = get_data_model();
-    if (!dm) return -1;
+    if (!dm) return 0;
     em_ap_radio_advanced_cap_t *ap_adv_cap = reinterpret_cast<em_ap_radio_advanced_cap_t *>(buff);
     // One TLV per radio
-    for (unsigned int i = 0; i < dm->get_num_radios(); i++) {
-        dm_radio_t *radio = dm->get_radio(i);
-        if (!radio) continue;
-        memcpy(ap_adv_cap->ruid, radio->m_radio_info.intf.mac, sizeof(mac_address_t));
-        // TODO: remaining fields (bitfields) are Traffic Separation dependent.
-        // next radio
-        ap_adv_cap += 1;
-        len += static_cast<short>(sizeof(em_ap_radio_advanced_cap_t));
+    dm_radio_t *radio = dm->get_radio(get_radio_interface_mac());
+    if (!radio){
+        em_printfout("Radio not found for MAC %s", util::mac_to_string(get_radio_interface_mac()).c_str());
+        return 0;
     }
+    memset(ap_adv_cap, 0, sizeof(em_ap_radio_advanced_cap_t));
+    memcpy(ap_adv_cap->ruid, radio->m_radio_info.intf.mac, sizeof(mac_address_t));
+    // TODO: remaining fields (bitfields) are Traffic Separation dependent.
+    len += static_cast<short>(sizeof(em_ap_radio_advanced_cap_t));
 
     return len;
 }
@@ -1577,22 +1577,16 @@ short em_t::create_wifi7_tlv(unsigned char *buff)
 short em_t::create_channelscan_tlv(unsigned char *buff)
 {
     short len = 0;
+    unsigned char *tmp = buff;
     dm_easy_mesh_t  *dm;
     dm = get_data_model();
-    dm_radio_cap_t *radio_cap = dm->get_radio_cap(0);// todo: it is dev specific, will be addressed in next phase
-
-    if (radio_cap == NULL) {
-        em_printfout("create_channelscan_tlv: radio_cap NULL for MAC %s",
-                     util::mac_to_string(get_radio_interface_mac()).c_str());
-        return 0;
-    }
-    em_radio_cap_info_t* cap_info = radio_cap->get_radio_cap_info();
-    em_channel_scan_cap_radio_t *scan = reinterpret_cast<em_channel_scan_cap_radio_t *>(buff);
-
-    if ((scan == NULL) || (cap_info == NULL)) {
-        em_printfout("No data Found");
-        return 0;
-    }
+    
+    // Num_Radio
+    unsigned char num_radios = static_cast<unsigned char>(dm->get_num_radios());
+    if (num_radios > EM_MAX_BANDS) num_radios = EM_MAX_BANDS;
+    *tmp = num_radios;
+    tmp += sizeof(unsigned char);
+    len += static_cast<short>(sizeof(unsigned char));
 
     for (unsigned int i = 0; i < num_radios; i++) {
         mac_address_t ruid;
@@ -1646,76 +1640,91 @@ short em_t::create_channelscan_tlv(unsigned char *buff)
         }
     }
 
-    memcpy(scan, &cap_info->ch_scan, sizeof(em_channel_scan_cap_radio_t));
-    len = sizeof(em_channel_scan_cap_radio_t);
+    em_printfout("create_channelscan_tlv: total len=%d, num_radios=%d", len, num_radios);
     return len;
 }
 
 short em_t::create_prof_2_tlv(unsigned char *buff)
 {
-    short len = 0;
-    dm_easy_mesh_t  *dm;
-    dm = get_data_model();
-    dm_radio_cap_t *radio_cap = dm->get_radio_cap(0);//todo: it is dev specific
-
-    if (radio_cap == NULL) {
-        em_printfout("create_prof_2_tlv: radio_cap NULL for MAC %s",
-                     util::mac_to_string(get_radio_interface_mac()).c_str());
-        return 0;
-    }
-    em_radio_cap_info_t* cap_info = radio_cap->get_radio_cap_info();
     em_profile_2_ap_cap_t *prof = reinterpret_cast<em_profile_2_ap_cap_t *>(buff);
 
-    if ((prof == NULL) || (cap_info == NULL)) {
-        em_printfout("No data Found");
-        return 0;
-    }
+    // Profile-2 AP Capability TLV (17.2.48) — fields are platform capability declarations.
+    // No HAL or runtime source exists for these; values are hardcoded per implementation:
+    //
+    // max_prior_rule:      0 — Service Prioritization rules not supported.
+    // reserved1/2:         0 — Reserved fields, always 0.
+    // traffic_separation:  0 — VLAN-based traffic separation not supported.
+    // dpp_onboarding:      1 — DPP/EasyConnect onboarding supported
+    //                          (EasyConnect module is compiled in; see src/em/prov/easyconnect/).
+    // prioritization:      0 — Service Prioritization not supported.
+    // byte_counter_units:  0 — Byte counters reported in bytes (0x00=bytes, 0x01=KB, 0x02=MB).
+    // max_vid_count:       0 — No VLAN IDs supported (traffic_separation=0).
+    prof->max_prior_rule     = 0;
+    prof->reserved1          = 0;
+    prof->reserved2          = 0;
+    prof->traffic_separation = 0;
+    prof->dpp_onboarding     = 1;
+    prof->prioritization     = 0;
+    prof->byte_counter_units = 0;
+    prof->max_vid_count      = 0;
 
-    memcpy(&prof, &cap_info->prof_2_ap_cap, sizeof(em_profile_2_ap_cap_t));
-    len = sizeof(em_profile_2_ap_cap_t);
-    return len;
+    return static_cast<short>(sizeof(em_profile_2_ap_cap_t));
 }
 
 short em_t::create_device_inventory_tlv(unsigned char *buff)
 {
     short len = 0;
     dm_easy_mesh_t* dm;
-    dm_radio_t* radio = get_data_model()->get_radio(static_cast<unsigned int>(0));//todo: it is dev specific
-    em_radio_info_t* radio_info = radio->get_radio_info();
     unsigned char *tmp = buff;
-
-    if ((radio_info == NULL)) {
-        em_printfout("No data Found");
-        return 0;
-    }
-
-    memcpy(tmp, &radio_info->inventory_info.serial_len, sizeof(unsigned char));
-    tmp += sizeof(unsigned char);
-    if (radio_info->inventory_info.serial_len) {
-        memcpy(tmp, radio_info->inventory_info.serial, radio_info->inventory_info.serial_len);
-        tmp += radio_info->inventory_info.serial_len;
-    }
-    len += static_cast<short>(sizeof(unsigned char) + radio_info->inventory_info.serial_len);
-
-    memcpy(tmp, &radio_info->inventory_info.ver_len, sizeof(unsigned char));
-    tmp += sizeof(unsigned char);
-    if (radio_info->inventory_info.ver_len) {
-        memcpy(tmp, radio_info->inventory_info.version, radio_info->inventory_info.ver_len);
-        tmp += radio_info->inventory_info.ver_len;
-    }
-    len += static_cast<short>(sizeof(unsigned char) + radio_info->inventory_info.ver_len);
-
-    memcpy(tmp, &radio_info->inventory_info.envi_len, sizeof(unsigned char));
-    tmp += sizeof(unsigned char);
-    if (radio_info->inventory_info.envi_len) {
-        memcpy(tmp, radio_info->inventory_info.environment, radio_info->inventory_info.envi_len);
-        tmp += radio_info->inventory_info.envi_len;
-    }
-    len += static_cast<short>(sizeof(unsigned char) + radio_info->inventory_info.envi_len);
+    unsigned char data_len;
+    size_t slen;
 
     dm = get_data_model();
+    auto* info = dm->get_device_info();
+
+    /* Per spec each inventory string is at most 64 octets */
+    static constexpr size_t EM_INVENTORY_STR_MAX = 64;
+
+    // 1. Serial Number
+    slen = (info) ? strlen(info->serial_number) : 0;
+    if (slen > sizeof(info->serial_number) - 1) slen = sizeof(info->serial_number) - 1;
+    if (slen > EM_INVENTORY_STR_MAX) slen = EM_INVENTORY_STR_MAX;
+    data_len = static_cast<unsigned char>(slen);
+    *tmp++ = data_len;
+    if (data_len > 0) {
+        memcpy(tmp, info->serial_number, data_len);
+        tmp += data_len;
+    }
+    len += (1 + data_len);
+
+    // 2. Software Version
+    slen = (info) ? strlen(info->software_ver) : 0;
+    if (slen > sizeof(info->software_ver) - 1) slen = sizeof(info->software_ver) - 1;
+    if (slen > EM_INVENTORY_STR_MAX) slen = EM_INVENTORY_STR_MAX;
+    data_len = static_cast<unsigned char>(slen);
+    *tmp++ = data_len;
+    if (data_len > 0) {
+        memcpy(tmp, info->software_ver, data_len);
+        tmp += data_len;
+    }
+    len += (1 + data_len);
+
+    // 3. Environment
+    slen = (info) ? strlen(info->environment) : 0;
+    if (slen > sizeof(info->environment) - 1) slen = sizeof(info->environment) - 1;
+    if (slen > EM_INVENTORY_STR_MAX) slen = EM_INVENTORY_STR_MAX;
+    data_len = static_cast<unsigned char>(slen);
+    *tmp++ = data_len;
+    if (data_len > 0) {
+        memcpy(tmp, info->environment, data_len);
+        tmp += data_len;
+    }
+    len += (1 + data_len);
+
+    em_printfout("data_len: %d, len: %d", data_len, len);
 
     unsigned char num_radios = static_cast<unsigned char> (dm->get_num_radios());
+    if (num_radios > EM_MAX_BANDS) num_radios = EM_MAX_BANDS;
     memcpy(tmp, &num_radios, sizeof(unsigned char));
     tmp += sizeof(unsigned char);
     len += static_cast<short>(sizeof(unsigned char));
@@ -1726,13 +1735,18 @@ short em_t::create_device_inventory_tlv(unsigned char *buff)
         tmp += sizeof(mac_address_t);
         len += static_cast<short>(sizeof(mac_address_t));
 
-        memcpy(tmp, &radio_info->inventory_info.radios[i].vendor_len, sizeof(unsigned char));
+        slen = (dm->get_radio_info(i)) ? strlen(dm->get_radio_info(i)->chip_vendor) : 0;
+        if (slen > sizeof(dm->get_radio_info(i)->chip_vendor) - 1) slen = sizeof(dm->get_radio_info(i)->chip_vendor) - 1;
+        if (slen > EM_INVENTORY_STR_MAX) slen = EM_INVENTORY_STR_MAX;
+        data_len = static_cast<unsigned char>(slen);
+        *tmp = data_len;
         tmp += sizeof(unsigned char);
-        if(radio_info->inventory_info.radios[i].vendor_len) {
-            memcpy(tmp, radio_info->inventory_info.radios[i].vendor, radio_info->inventory_info.radios[i].vendor_len);
-            tmp += radio_info->inventory_info.radios[i].vendor_len;
+        if (data_len > 0) {
+            memcpy(tmp, dm->get_radio_info(i)->chip_vendor, data_len);
+            tmp += data_len;
         }
-        len += static_cast<short>(sizeof(unsigned char) + radio_info->inventory_info.radios[i].vendor_len);
+
+        len += static_cast<short>(sizeof(unsigned char) + data_len);
     }
     return len;
 }
@@ -1789,12 +1803,8 @@ short em_t::create_metric_col_int_tlv(unsigned char *buff)
 
 short em_t::create_cac_cap_tlv(unsigned char *buff)
 {
-    short len = 0;
-    dm_easy_mesh_t  *dm;
-    dm = get_data_model();
-    for(unsigned int index = 0; index < dm->get_num_radios(); index++){
-        dm_radio_t radio = dm->get_radio_by_ref(index);
-        dm_radio_cap_t *radio_cap = dm->get_radio_cap(radio.m_radio_info.intf.mac);
+    unsigned char *tmp = buff;
+    dm_easy_mesh_t *dm = get_data_model();
 
     // Country Code - 2 octets
     em_device_info_t *dev_info = dm->get_device_info();
@@ -1830,23 +1840,70 @@ short em_t::create_cac_cap_tlv(unsigned char *buff)
         }
         dm_radio_cap_t *radio_cap = dm->get_radio_cap(index);
         if (radio_cap == NULL) {
-            em_printfout("create_cac_cap_tlv: radio_cap NULL for MAC %s",
-                         util::mac_to_string(get_radio_interface_mac()).c_str());
-            return 0;
+            em_printfout("create_cac_cap_tlv: radio[%u] get_radio_cap returned NULL", index);
+            continue;
         }
-        em_radio_cap_info_t* cap_info = radio_cap->get_radio_cap_info();
-        em_cac_cap_t *cac = reinterpret_cast<em_cac_cap_t *>(buff);
+        em_radio_cap_info_t *cap_info = radio_cap->get_radio_cap_info();
+        if (cap_info == NULL) {
+            em_printfout("create_cac_cap_tlv: radio[%u] get_radio_cap_info returned NULL", index);
+            continue;
+        }
+        em_cac_cap_radio_t *cac_radio = &cap_info->cac_cap;
 
-        if ((cac == NULL) || (cap_info == NULL)) {
-            em_printfout("No data Found");
-            return 0;
+        /* Only include radios that can perform CAC */
+        if (cac_radio->cac_methods_num == 0) {
+            em_printfout("create_cac_cap_tlv: radio[%u] cac_methods_num=0, skipping", index);
+            continue;
         }
 
-        memcpy(&cac->radios[index], &cap_info->cac_cap, sizeof(em_cac_cap_radio_t));
-    	cac->radios_num = dm->get_num_radios();
+        /* RUID — 6 octets */
+        memcpy(tmp, cac_radio->ruid, sizeof(mac_address_t));
+        tmp += sizeof(mac_address_t);
+
+        /* Num_Types — 1 octet */
+        *tmp++ = cac_radio->cac_methods_num;
+
+        for (unsigned char m = 0; m < cac_radio->cac_methods_num; m++) {
+            em_cac_cap_method_t *method = &cac_radio->cac_methods[m];
+
+            /* Method — 1 octet */
+            *tmp++ = method->cac_method;
+
+            /* Duration — 3 octets big-endian */
+            unsigned int dur = method->cac_duration;
+            *tmp++ = static_cast<unsigned char>((dur >> 16) & 0xff);
+            *tmp++ = static_cast<unsigned char>((dur >>  8) & 0xff);
+            *tmp++ = static_cast<unsigned char>( dur        & 0xff);
+
+            /* Num_OpClass — 1 octet */
+            *tmp++ = method->op_classes_num;
+
+            for (unsigned char oc = 0; oc < method->op_classes_num; oc++) {
+                em_cac_op_class_t *op = &method->op_classes[oc];
+
+                /* OpClass — 1 octet */
+                *tmp++ = op->op_class;
+
+                /* Num_Chan — 1 octet */
+                *tmp++ = op->num;
+
+                /* Channel × Num_Chan */
+                for (unsigned char ch = 0; ch < op->num; ch++) {
+                    *tmp++ = op->channels[ch];
+                }
+            }
+        }
+        cac_radio_count++;
     }
-    len = sizeof(em_cac_cap_t);
-    return len;
+
+    *num_radio_ptr = cac_radio_count;
+
+    em_printfout("create_cac_cap_tlv: num_radios=%u CC='%c%c'",
+        cac_radio_count,
+        (dev_info && dev_info->country_code[0]) ? dev_info->country_code[0] : '?',
+        (dev_info && dev_info->country_code[1]) ? dev_info->country_code[1] : '?');
+
+    return static_cast<short>(tmp - buff);    
 }
 
 unsigned short em_t::create_eht_operations_tlv(unsigned char *buff)
