@@ -253,7 +253,15 @@ void em_t::orch_execute(em_cmd_t *pcmd)
             m_sm.set_state(em_state_agent_link_quality_report_pending);
             break;
 
-        default:
+        case em_cmd_type_unassoc_sta_query:
+            m_sm.set_state(em_state_ctrl_unassoc_sta_link_metrics_pending);
+            break;
+
+        case em_cmd_type_unassoc_sta_result:
+            m_sm.set_state(em_state_agent_unassoc_sta_metrics_report_pending);
+            break;
+        
+	default:
             break;
 
     }
@@ -327,6 +335,8 @@ void em_t::proto_process(unsigned char *data, unsigned int len)
         case em_msg_type_beacon_metrics_rsp:
         case em_msg_type_ap_metrics_rsp:
         case em_msg_type_topo_vendor:
+	case em_msg_type_unassoc_sta_link_metrics_query: 
+        case em_msg_type_unassoc_sta_link_metrics_rsp:	    
             em_metrics_t::process_msg(data, len);
             break;
 
@@ -351,6 +361,8 @@ void em_t::proto_process(unsigned char *data, unsigned int len)
                 em_configuration_t::process_msg(data, len);
             } else if (m_sm.get_state() == em_state_ctrl_sta_steer_pending) {
                 em_steering_t::process_msg(data, len);
+            } else if (m_sm.get_state() == em_state_ctrl_unassoc_sta_link_metrics_pending) {
+                em_metrics_t::process_msg(data, len);		    
             } else {
                 em_policy_cfg_t::process_msg(data, len);
                 em_channel_t::process_msg(data, len);
@@ -482,6 +494,12 @@ void em_t::handle_agent_state()
             }
             break;
 
+        case em_cmd_type_unassoc_sta_result:
+            if (m_sm.get_state() == em_state_agent_unassoc_sta_metrics_report_pending) {
+                em_metrics_t::process_agent_state();
+            }
+            break;
+
         default:
             break;
     }
@@ -553,6 +571,10 @@ void em_t::handle_ctrl_state()
 
         case em_cmd_type_bsta_cap:
             em_capability_t::process_ctrl_state();
+            break;
+
+        case em_cmd_type_unassoc_sta_query:
+            em_metrics_t::process_ctrl_state();
             break;
 
         default:
@@ -1457,8 +1479,8 @@ short em_t::create_wifi7_tlv(unsigned char *buff)
     offset += static_cast<short>(sizeof(unsigned char));
     em_printfout("  offset:%d", offset);
     for (unsigned int i = 0; i < dm->get_num_radios(); i++) {
-        em_wifi7_cap = &dm->get_radio_cap_info(static_cast<int>(i))->wifi7_cap;
-        em_printfout("Radio[%d]: %s", i, util::mac_to_string(dm->get_radio_cap_info(static_cast<int>(i))->ruid.mac).c_str());
+        em_wifi7_cap = &dm->get_radio_cap_info(i)->wifi7_cap;
+        em_printfout("Radio[%u]: %s", i, util::mac_to_string(dm->get_radio_cap_info(i)->ruid.mac).c_str());
 
         // MLO Support Capabilities
         mlo_mand = reinterpret_cast<em_wifi7_mlo_cap_support_tlv_t *>(buff + offset);
@@ -1570,6 +1592,58 @@ short em_t::create_channelscan_tlv(unsigned char *buff)
     if ((scan == NULL) || (cap_info == NULL)) {
         em_printfout("No data Found");
         return 0;
+    }
+
+    for (unsigned int i = 0; i < num_radios; i++) {
+        mac_address_t ruid;
+        memcpy(ruid, dm->get_radio_by_ref(i).m_radio_info.intf.mac, sizeof(mac_address_t));
+        dm_radio_cap_t *radio_cap = dm->get_radio_cap(ruid);
+        if (radio_cap == NULL) {
+            em_printfout("create_channelscan_tlv: radio_cap NULL for RUID %s",
+                util::mac_to_string(ruid).c_str());
+            return 0;
+        }
+       em_radio_cap_info_t *cap_info = radio_cap->get_radio_cap_info();
+        if (cap_info == NULL) {
+            em_printfout("create_channelscan_tlv: cap_info NULL for index %u", i);
+            return 0;
+        }
+
+        em_channel_scan_cap_radio_t *scan = reinterpret_cast<em_channel_scan_cap_radio_t *>(tmp);
+        // RUID
+        memcpy(scan->ruid, cap_info->ruid.mac, sizeof(mac_address_t));
+
+        // flags — struct bitfields map directly to spec layout
+        scan->boot_only    = cap_info->ch_scan.boot_only;
+        scan->scan_impact  = cap_info->ch_scan.scan_impact;
+        scan->reserved     = 0;
+
+        // Minimum Scan Interval — network byte order
+        scan->min_scan_interval = htonl(cap_info->ch_scan.min_scan_interval);
+
+        // fixed part of the struct (excludes variable-length op_classes array)
+        len += static_cast<short>(sizeof(em_channel_scan_cap_radio_t)
+                                  - sizeof(scan->op_classes));
+        tmp += sizeof(em_channel_scan_cap_radio_t) - sizeof(scan->op_classes);
+
+        // Per OpClass: OperatingClass(1) + Num_Chan(1) + ChannelList(Num_Chan)
+        // Populate scan-specific data already stored in ch_scan.
+        scan->op_classes_num = 0;
+        if (cap_info->ch_scan.op_classes_num > 0) {
+            scan->op_classes_num = cap_info->ch_scan.op_classes_num;
+            for (unsigned char j = 0; j < cap_info->ch_scan.op_classes_num; j++) {
+                const em_scan_cap_op_class_info_t *scan_entry = &cap_info->ch_scan.op_classes[j];
+
+                *tmp = scan_entry->op_class;  tmp++; len++;
+                *tmp = scan_entry->num;       tmp++; len++;
+
+                for (unsigned char k = 0; k < scan_entry->num; k++) {
+                    *tmp = scan_entry->channels.channel[k]; tmp++; len++;
+                }
+
+                em_printfout("Ch scan for radio:%s, op class=%d, channel cnt=%d", util::mac_to_string(cap_info->ruid.mac).c_str(), scan->op_classes_num, cap_info->ch_scan.op_classes[j].num);
+            }
+        }
     }
 
     memcpy(scan, &cap_info->ch_scan, sizeof(em_channel_scan_cap_radio_t));
@@ -1693,7 +1767,7 @@ short em_t::create_metric_col_int_tlv(unsigned char *buff)
     short len = 0;
     dm_easy_mesh_t  *dm;
     dm = get_data_model();
-    dm_radio_cap_t *radio_cap = dm->get_radio_cap(0);//todo: it is dev specific
+    dm_radio_cap_t *radio_cap = dm->get_radio_cap(0u);//todo: it is dev specific
 
     if (radio_cap == NULL) {
         em_printfout("create_metric_col_int_tlv: radio_cap NULL for MAC %s",
@@ -1708,7 +1782,7 @@ short em_t::create_metric_col_int_tlv(unsigned char *buff)
         return 0;
     }
 
-    memcpy(&clt, &cap_info->metric_interval, sizeof(em_metric_cltn_interval_t));
+    memcpy(clt, &cap_info->metric_interval, sizeof(em_metric_cltn_interval_t));
     len = sizeof(em_metric_cltn_interval_t);
     return len;
 }
@@ -1722,6 +1796,39 @@ short em_t::create_cac_cap_tlv(unsigned char *buff)
         dm_radio_t radio = dm->get_radio_by_ref(index);
         dm_radio_cap_t *radio_cap = dm->get_radio_cap(radio.m_radio_info.intf.mac);
 
+    // Country Code - 2 octets
+    em_device_info_t *dev_info = dm->get_device_info();
+    if (dev_info != NULL && dev_info->country_code[0] != '\0') {
+        *tmp++ = static_cast<unsigned char>(dev_info->country_code[0]);
+        *tmp++ = static_cast<unsigned char>(dev_info->country_code[1]);
+    } else {
+        /* Fallback: read the kernel regulatory country via 'iw reg get' */
+        char sys_cc[3] = {0};//{'U', 'S', '\0'};
+        FILE *fp = popen("iw reg get 2>/dev/null | awk '/^country/ {print substr($2,1,2); exit}'", "r");
+        if (fp != NULL) {
+            char buf[8] = {};
+            if (fgets(buf, sizeof(buf), fp) != NULL && buf[0] >= 'A' && buf[0] <= 'Z') {
+                sys_cc[0] = buf[0];
+                sys_cc[1] = (buf[1] >= 'A' && buf[1] <= 'Z') ? buf[1] : 'S';
+            }
+            pclose(fp);
+        }
+        *tmp++ = static_cast<unsigned char>(sys_cc[0]);
+        *tmp++ = static_cast<unsigned char>(sys_cc[1]);
+    }
+
+    /* Num_Radio placeholder — filled after we know how many radios have CAC */
+    unsigned char *num_radio_ptr = tmp++;
+    unsigned char cac_radio_count = 0;
+
+    unsigned int max_radios = dm->get_num_radios();
+    if (max_radios > EM_MAX_BANDS) max_radios = EM_MAX_BANDS;
+
+    for (unsigned int index = 0; index < max_radios; index++) {
+        if (dm->get_radio_by_ref(index).m_radio_info.band != em_freq_band_5) {
+            continue;
+        }
+        dm_radio_cap_t *radio_cap = dm->get_radio_cap(index);
         if (radio_cap == NULL) {
             em_printfout("create_cac_cap_tlv: radio_cap NULL for MAC %s",
                          util::mac_to_string(get_radio_interface_mac()).c_str());
@@ -1917,7 +2024,7 @@ int em_t::handle_eht_operations_tlv(unsigned char *buff, unsigned short tlv_len)
         memcpy(&num_bss, tmp, sizeof(unsigned char));
 
         if (num_bss > EM_MAX_BSS_PER_RADIO) {
-            em_printfout("Invalid num_bss=%d for radio %d, max allowed=%d", num_bss, i, EM_MAX_BSS_PER_RADIO);
+            em_printfout("Invalid num_bss=%d for radio %u, max allowed=%d", num_bss, i, EM_MAX_BSS_PER_RADIO);
             return -1;
         }
 
@@ -2500,25 +2607,25 @@ int em_t::handle_wifi7_agent_cap_tlv(unsigned char *buff)
 
     // Number of radios
     unsigned char *num_radios_ptr = reinterpret_cast<unsigned char *>(buff + offset);
-    int num_radios = static_cast<int>(*num_radios_ptr);
-    em_printfout("Number of radios in wifi7 agent cap: %d", num_radios);
+    unsigned int num_radios = static_cast<unsigned int>(*num_radios_ptr);
+    em_printfout("Number of radios in wifi7 agent cap: %u", num_radios);
     offset += static_cast<short>(sizeof(unsigned char));
 
     if (dm != NULL) {
-        int dm_num_radios = static_cast<int>(dm->get_num_radios());
+        unsigned int dm_num_radios = dm->get_num_radios();
         if (num_radios > EM_MAX_RADIO_PER_AGENT) {
-            em_printfout("Clamping num_radios from %d to EM_MAX_RADIO_PER_AGENT (%d)", num_radios, EM_MAX_RADIO_PER_AGENT);
+            em_printfout("Clamping num_radios from %u to EM_MAX_RADIO_PER_AGENT (%d)", num_radios, EM_MAX_RADIO_PER_AGENT);
             num_radios = EM_MAX_RADIO_PER_AGENT;
         }
         if (num_radios > dm_num_radios) {
-            em_printfout("Clamping num_radios from %d to dm->get_num_radios() (%d)", num_radios, dm_num_radios);
+            em_printfout("Clamping num_radios from %u to dm->get_num_radios() (%u)", num_radios, dm_num_radios);
             num_radios = dm_num_radios;
         }
     }
 
-    for (int idx = 0; idx < num_radios; idx++) {
+    for (unsigned int idx = 0; idx < num_radios; idx++) {
         em_wifi7_cap = &dm->get_radio_cap_info(idx)->wifi7_cap;
-        em_printfout("Updating wifi7 cap for radio[%d]:%s", idx, util::mac_to_string(dm->get_radio_cap_info(idx)->ruid.mac).c_str());
+        em_printfout("Updating wifi7 cap for radio[%u]:%s", idx, util::mac_to_string(dm->get_radio_cap_info(idx)->ruid.mac).c_str());
 
         // Extract MLO support info
         mlo_support = reinterpret_cast<em_wifi7_mlo_cap_support_tlv_t *>(buff + offset);
@@ -2717,6 +2824,7 @@ const char *em_t::state_2_str(em_state_t state)
         EM_STATE_2S(em_state_ctrl_avail_spectrum_inquiry_pending)
         EM_STATE_2S(em_state_ctrl_bsta_cap_pending)
         EM_STATE_2S(em_state_ctrl_topo_publish_pending)
+	EM_STATE_2S(em_state_ctrl_unassoc_sta_link_metrics_pending)
         EM_STATE_2S(em_state_agent_unconfigured)
         EM_STATE_2S(em_state_agent_autoconfig_rsp_pending)
         EM_STATE_2S(em_state_agent_wsc_m2_pending)
@@ -2735,9 +2843,10 @@ const char *em_t::state_2_str(em_state_t state)
         EM_STATE_2S(em_state_agent_client_cap_report)
         EM_STATE_2S(em_state_agent_channel_pref_query)
         EM_STATE_2S(em_state_agent_sta_link_metrics_pending)
-        EM_STATE_2S(em_state_max)
         EM_STATE_2S(em_state_agent_beacon_report_pending)
         EM_STATE_2S(em_state_agent_channel_select_configuration_pending)
+	EM_STATE_2S(em_state_agent_unassoc_sta_metrics_report_pending)
+        EM_STATE_2S(em_state_max)
         default: break;
     }
 
