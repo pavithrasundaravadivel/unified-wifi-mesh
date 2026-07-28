@@ -819,6 +819,8 @@ int em_metrics_t::send_associated_link_metrics_response(mac_address_t sta_mac, u
     bool sta_found = false;
     dm_sta_t *sta;
 
+    em_printfout("%s:%d Entering\n", __func__, __LINE__);
+
     sta = reinterpret_cast<dm_sta_t *> (hash_map_get_first(dm->m_sta_map));
     while(sta != NULL) {
         if (memcmp(sta->m_sta_info.id, sta_mac, sizeof(mac_address_t)) == 0) {
@@ -883,7 +885,8 @@ int em_metrics_t::send_associated_link_metrics_response(mac_address_t sta_mac, u
 
     tmp += (sizeof(em_tlv_t) + static_cast<size_t> (sz));
     len += (sizeof(em_tlv_t) + static_cast<size_t> (sz));
-
+    
+    em_printfout("%s:%d Entering\n", __func__, __LINE__);
     //assoc vendor link metrics
     tlv = reinterpret_cast<em_tlv_t *> (tmp);
     tlv->type = em_tlv_type_vendor_specific;
@@ -902,15 +905,15 @@ int em_metrics_t::send_associated_link_metrics_response(mac_address_t sta_mac, u
     len += (sizeof (em_tlv_t));
 
     if (em_msg_t(em_msg_type_assoc_sta_link_metrics_rsp, em_profile_type_3, buff, static_cast<unsigned int> (len)).validate(errors) == 0) {
-        printf("%s:%d: Associated STA Link Metrics validation failed for %s\n", __func__, __LINE__, mac_str);
+        em_printfout("%s:%d: Associated STA Link Metrics validation failed for %s\n", __func__, __LINE__, mac_str);
         return -1;
     }
 
     if (send_frame(buff, static_cast<unsigned int> (len))  < 0) {
-        printf("%s:%d: Associated STA Link Metrics  send failed, error:%d\n", __func__, __LINE__, errno);
+        em_printfout("%s:%d: Associated STA Link Metrics  send failed, error:%d\n", __func__, __LINE__, errno);
         return -1;
     }
-    printf("%s:%d: Associated STA Link Metrics for sta %s sent successfully\n", __func__, __LINE__, mac_str);
+    em_printfout("%s:%d: Associated STA Link Metrics for sta %s sent successfully\n", __func__, __LINE__, mac_str);
 
     return static_cast<int> (len);
 }
@@ -1151,6 +1154,7 @@ int em_metrics_t::send_ap_metrics_response()
     dm_easy_mesh_t *dm = get_data_model();
     dm_sta_t *sta;
     int bss_index = 0;
+    em_printfout("%s:%d Entering\n", __func__, __LINE__);
 
     memcpy(tmp, dm->get_ctl_mac(), sizeof(mac_address_t));
     tmp += sizeof(mac_address_t);
@@ -1250,6 +1254,7 @@ int em_metrics_t::send_ap_metrics_response()
                 len += (sizeof(em_tlv_t) + static_cast<size_t> (sz));
             }
 
+            em_printfout("%s:%d Entering\n", __func__, __LINE__);
             //assoc vendor link metrics
             tlv = reinterpret_cast<em_tlv_t *> (tmp);
             tlv->type = em_tlv_type_vendor_specific;
@@ -1403,6 +1408,7 @@ short em_metrics_t::create_assoc_vendor_sta_link_metrics_tlv(unsigned char *buff
     em_vendor_specific_t *vendor_metrics = reinterpret_cast<em_vendor_specific_t *> (buff);
     em_vendor_data_t *vendor_data = vendor_metrics->data;
 
+    em_printfout("%s:%d Entering\n", __func__, __LINE__);
     assoc_sta_metrics = reinterpret_cast<em_assoc_sta_vendor_link_metrics_t *> (vendor_data->vendor_data);
 
     memcpy(vendor_metrics->vendor_oui, comcast_vendor_oui, sizeof(vendor_metrics->vendor_oui));
@@ -1417,13 +1423,14 @@ short em_metrics_t::create_assoc_vendor_sta_link_metrics_tlv(unsigned char *buff
     if (sta == NULL) {
         memcpy(&assoc_sta_metrics->sta_mac, &sta_mac, sizeof(assoc_sta_metrics->sta_mac));
         len += sizeof(assoc_sta_metrics->sta_mac);
-
+        em_printfout("%s:%d Entering\n", __func__, __LINE__);
         /*assoc_sta_metrics->num_bssids = 0;
         len += sizeof(assoc_sta_metrics->num_bssids);*/
         return static_cast<short> (len);
     }
     else {
         if ((memcmp(sta->m_sta_info.id, sta_mac, sizeof(mac_address_t)) == 0)) {
+            em_printfout("%s:%d Entering\n", __func__, __LINE__);
             memcpy(assoc_sta_metrics->sta_mac, sta->m_sta_info.id, sizeof(assoc_sta_metrics->sta_mac));
             len += sizeof(assoc_sta_metrics->sta_mac);
 
@@ -1434,6 +1441,7 @@ short em_metrics_t::create_assoc_vendor_sta_link_metrics_tlv(unsigned char *buff
             len += sizeof(assoc_sta_metrics->sta_client_type);
         }
     }
+    em_printfout("%s:%d Entering\n", __func__, __LINE__);
     return static_cast<short> (len);
 }
 
@@ -2516,6 +2524,7 @@ void em_metrics_t::process_agent_state(em_cmd_event_type_t type)
 {
     switch (type) {
         case em_cmd_event_type_ap_metrics_report:
+            em_printfout("%s:%d Entering\n", __func__, __LINE__);
             send_ap_metrics_response();
             break;
 
