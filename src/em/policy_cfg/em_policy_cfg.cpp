@@ -118,9 +118,10 @@ short em_policy_cfg_t::create_metrics_rep_policy_tlv(unsigned char *buff)
                     if (policy->m_policy.sta_traffic_stats == true) {
                         radio_metric->sta_policy |= (1 << 7);
                     }
-                    if (policy->m_policy.sta_link_metric == true) {
+                    //This is for controller
+                    //if (policy->m_policy.sta_link_metric == true) {
                         radio_metric->sta_policy |= (1 << 6);
-                    }
+                    //}
                     if (policy->m_policy.sta_status == true) {
                         radio_metric->sta_policy |= (1 << 5);
                     }
@@ -879,11 +880,7 @@ int em_policy_cfg_t::handle_policy_cfg_req(unsigned char *buff, unsigned int len
     // Save as baseline for next partial update.
     last_policy = policy;
 
-    if (get_mgr()->is_passive()) {
-        em_printfout("Passive mode: skipping set policy configuration push to OneWifi");
-    } else {
-        get_mgr()->io_process(em_bus_event_type_set_policy, reinterpret_cast<unsigned char *> (&policy), sizeof(policy));
-    }
+    get_mgr()->io_process(em_bus_event_type_set_policy, reinterpret_cast<unsigned char *> (&policy), sizeof(policy));
     send_1905_ack_message(ntohs(cmdu->id));
 
     return 0;
