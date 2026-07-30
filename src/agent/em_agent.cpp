@@ -1111,11 +1111,13 @@ void em_agent_t::handle_set_policy(em_bus_event_t *evt)
        printf("descriptor is null");
     }
 
+    em_printfout("%s:%d Entering\n", __func__, __LINE__);
     if (m_orch->is_cmd_type_in_progress(evt) == true) {
         printf("set policy in progress\n");
     } else if ((num = m_data_model.analyze_set_policy(evt, desc, &m_bus_hdl)) == 0) {
         printf("set policy failed\n");
     }
+    em_printfout("%s:%d Entering\n", __func__, __LINE__);
 }
 
 void em_agent_t::handle_beacon_report(em_bus_event_t *evt)

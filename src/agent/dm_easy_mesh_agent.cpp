@@ -1067,6 +1067,7 @@ int dm_easy_mesh_agent_t::analyze_set_policy(em_bus_event_t *evt, wifi_bus_desc_
 {
     em_policy_cfg_params_t *policy_cfg = (em_policy_cfg_params_t *)evt->u.raw_buff;
 
+     em_printfout("%s:%d Entering\n", __func__, __LINE__);
     return refresh_onewifi_subdoc(desc, bus_hdl, "Policy", webconfig_subdoc_type_em_config, NULL, policy_cfg);
 }
 
@@ -1292,6 +1293,7 @@ int dm_easy_mesh_agent_t::refresh_onewifi_subdoc(wifi_bus_desc_t *desc, bus_hand
 
     char *webconfig_easymesh_raw_data_ptr;
 
+    em_printfout("%s:%d Entering with type %d\n", __func__, __LINE__, type);
     if ((webconfig_easymesh_encode(&config, &ext_data, type, &webconfig_easymesh_raw_data_ptr )) == webconfig_error_none) {
         em_printfout("%s subdoc encode success %s", logname, webconfig_easymesh_raw_data_ptr);
     } else {
