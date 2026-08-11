@@ -179,6 +179,7 @@ void dm_sta_t::encode(cJSON *obj, em_get_sta_list_reason_t reason)
         cJSON_AddStringToObject(obj, "ClientType", m_sta_info.sta_client_type);
     }
     cJSON_AddStringToObject(obj, "MACAddress", mac_str);
+    cJSON_AddStringToObject(obj, "deviceModel", m_sta_info.sta_client_type);
     cJSON_AddBoolToObject(obj, "Associated", m_sta_info.associated);
 
     if (reason == em_get_sta_list_reason_none) {

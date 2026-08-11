@@ -1430,6 +1430,11 @@ short em_metrics_t::create_assoc_sta_link_metrics_tlv(unsigned char *buff, mac_a
             memcpy(&metrics->bssid, &sta->m_sta_info.bssid, sizeof(metrics->bssid));
             len += sizeof(metrics->bssid);
 
+	    if (strlen(sta->m_sta_info.sta_client_type) > 0) {
+                memcpy(&metrics->sta_client_type, &sta->m_sta_info.sta_client_type, sizeof(metrics->sta_client_type));
+		len += sizeof(metrics->sta_client_type);
+	    }
+
             metrics->time_delta_ms = htonl(sta->m_sta_info.delta_ms);
             len += sizeof(metrics->time_delta_ms);
 
