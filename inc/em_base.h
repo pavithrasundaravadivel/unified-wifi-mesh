@@ -1200,7 +1200,6 @@ typedef struct {
 
 typedef struct {
     bssid_t     bssid;
-    em_string_t sta_client_type;
     unsigned int  time_delta_ms;
     unsigned int  est_mac_data_rate_dl;
     unsigned int  est_mac_data_rate_ul;
