@@ -197,13 +197,13 @@ int dm_easy_mesh_agent_t::analyze_sta_list(em_bus_event_t *evt, em_cmd_t *pcmd[]
                 continue;
             }
             //Get the client type via rbus
+	    dm_easy_mesh_t::macbytes_to_string(sta->m_sta_info.id, sta_mac_str);
 	    char sta_type[32] = {0};
             int rc = get_client_type(sta_mac_str, sta_type);
             if (rc == 0) {
                 memcpy(sta->m_sta_info.sta_client_type, sta_type, sizeof(sta->m_sta_info.sta_client_type));
-                em_printfout("Client type updated here as %s\n", sta->m_sta_info.sta_client_type);
+                em_printfout("Client type updated here as %s for mac %s\n", sta->m_sta_info.sta_client_type, sta_mac_str);
             }
-            dm_easy_mesh_t::macbytes_to_string(sta->m_sta_info.id, sta_mac_str);
             dm_easy_mesh_t::macbytes_to_string(sta->m_sta_info.radiomac, radio_mac_str);
             is_tracked_sta_mld = false;
             for (k = 0; k < assoc_sta_mld_tracked_count; k++) {
