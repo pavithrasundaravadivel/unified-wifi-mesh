@@ -471,12 +471,6 @@ void dm_sta_t::decode_sta_capability(dm_sta_t *sta)
     sta->m_sta_info.num_vendor_infos = 0;
 
     em_printfout("Entering %s\n", __func__);
-    /* The frame_body stores the full 802.11 (Re)Association Request frame body:
-     * capab_info (2B) + listen_interval (2B) + IEs. Skip the fixed fields. */
-    if (sta->m_sta_info.frame_body_len < 4) {
-        em_printfout("Frame body len is lesser\n");
-        return;
-    }
     offset = get_assoc_frame_ie_offset(sta->m_sta_info.frame_body, sta->m_sta_info.frame_body_len);
 
     while (offset < sta->m_sta_info.frame_body_len) {
