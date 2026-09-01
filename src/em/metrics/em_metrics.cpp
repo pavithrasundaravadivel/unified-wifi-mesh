@@ -46,7 +46,7 @@
 #include "em_cmd_exec.h"
 #include "dm_easy_mesh_agent.h"
 #include "em_cmd_unassoc_sta_query.h"
-
+#include <vector>
 
 int em_metrics_t::handle_assoc_sta_link_metrics_tlv(unsigned char *buff,
                                                     unsigned int tlv_len)
@@ -1228,13 +1228,17 @@ int em_metrics_t::send_link_quality_report()
 
 int em_metrics_t::send_ap_metrics_response()
 {
-    unsigned char buff[MAX_EM_BUFF_SZ] = {0};
+    //unsigned char buff[MAX_EM_BUFF_SZ] = {0};
+    //
+    // MAX_EM_BUFF_SZ (1024 B) is insufficient for responses containing many BSSs and
+    // associated STA TLVs. Allocate on the heap sized to the maximum BSS count.
+    std::vector<unsigned char> buff(MAX_EM_BUFF_SZ * EM_MAX_BSSS, 0);
     char *errors[EM_MAX_TLV_MEMBERS] = {0};
     unsigned short  msg_type = em_msg_type_ap_metrics_rsp;
     size_t len = 0;
     em_cmdu_t *cmdu;
     em_tlv_t *tlv;
-    unsigned char *tmp = buff;
+    unsigned char *tmp = buff.data();
     short sz = 0;
     unsigned short type = htons(ETH_P_1905);
     dm_easy_mesh_t *dm = get_data_model();
@@ -1383,13 +1387,13 @@ int em_metrics_t::send_ap_metrics_response()
     tmp += (sizeof(em_tlv_t));
     len += (sizeof(em_tlv_t));
 
-    if (em_msg_t(em_msg_type_ap_metrics_rsp, get_profile_type(), buff, static_cast<unsigned int> (len)).validate(errors) == 0) {
+    if (em_msg_t(em_msg_type_ap_metrics_rsp, get_profile_type(), buff.data(), static_cast<unsigned int> (len)).validate(errors) == 0) {
         em_printfout("AP Metrics Response validation failed for agent:%s, still sending",
             util::mac_to_string(dm->get_agent_al_interface_mac()).c_str());
         //return -1;
     }
 
-    if (send_frame(buff, static_cast<unsigned int> (len))  < 0) {
+    if (send_frame(buff.data(), static_cast<unsigned int> (len))  < 0) {
         em_printfout("AP Metrics Response send failed, error:%d\n", errno);
         return -1;
     }
