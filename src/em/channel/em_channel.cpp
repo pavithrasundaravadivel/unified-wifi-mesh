@@ -1644,6 +1644,9 @@ int em_channel_t::handle_op_channel_report(unsigned char *buff, unsigned int len
     mac_addr_str_t ruid_str;
     dm = get_data_model();
 
+    em_printfout("Operating Channel Report ruid: %s op_class: %d channel: %d",
+        util::mac_to_string(rpt->ruid).c_str(), rpt->op_classes[0].op_class, rpt->op_classes[0].channel);
+
     //Update current Operating Channel for RUID
     for (i = 0; i < dm->m_num_opclass; i++) {
         op_class_info = &dm->m_op_class[i].m_op_class_info;
