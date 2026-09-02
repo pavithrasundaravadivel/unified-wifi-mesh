@@ -342,11 +342,6 @@ short em_capability_t::create_client_cap_tlv(unsigned char *buff, mac_address_t 
     unsigned char res = 0;
     dm_easy_mesh_t *dm;
     dm_sta_t *dm_sta;
-    mac_addr_str_t sta_str, bssid_str;
-
-    dm_easy_mesh_t::macbytes_to_string(sta, sta_str);
-    dm_easy_mesh_t::macbytes_to_string(bssid, bssid_str);
-    em_printfout("DBG create_client_cap_tlv: sta=%s bssid=%s buff=%p", sta_str, bssid_str, static_cast<void*>(buff));
 
     dm = get_data_model();
 
@@ -359,13 +354,8 @@ short em_capability_t::create_client_cap_tlv(unsigned char *buff, mac_address_t 
     }
 
     if(dm_sta == NULL) {
-        em_printfout("DBG create_client_cap_tlv: sta=%s NOT FOUND in m_sta_map, returning 0", sta_str);
         return 0;
     }
-
-    em_printfout("DBG create_client_cap_tlv: sta=%s found, frame_body_len=%u frame_body ptr=%p",
-        sta_str, dm_sta->get_sta_info()->frame_body_len,
-        static_cast<const void*>(dm_sta->get_sta_info()->frame_body));
 
     memcpy(tmp, &res, sizeof(unsigned char));
     tmp += sizeof(unsigned char);
@@ -381,18 +371,10 @@ short em_capability_t::create_client_cap_tlv(unsigned char *buff, mac_address_t 
             sizeof(dm_sta->get_sta_info()->frame_body));
         frame_body_len = static_cast<unsigned int> (sizeof(dm_sta->get_sta_info()->frame_body));
     }
-    em_printfout("DBG create_client_cap_tlv: copying frame_body_len=%u into buff offset=%td",
-        frame_body_len, tmp - buff);
     memcpy(tmp, &dm_sta->get_sta_info()->frame_body, frame_body_len);
     tmp += frame_body_len;
     len += static_cast<short> (frame_body_len);
 
-    em_printfout("DBG create_client_cap_tlv: returning tlv_payload_len=%d (frame_body_len=%u, short overflow if len<0)",
-        len, frame_body_len);
-    if (len < 0) {
-        em_printfout("DBG create_client_cap_tlv: FATAL short overflow! frame_body_len=%u caused len=%d to wrap negative",
-            frame_body_len, len);
-    }
     return len;
 }
 
@@ -483,12 +465,7 @@ int em_capability_t::send_client_cap_report_msg(mac_address_t sta, bssid_t bss, 
     short sz = 0;
     unsigned short type = htons(ETH_P_1905);
     dm_easy_mesh_t *dm = get_data_model();
-    mac_addr_str_t mac_str, bss_str;
-
-    dm_easy_mesh_t::macbytes_to_string(sta, mac_str);
-    dm_easy_mesh_t::macbytes_to_string(bss, bss_str);
-    em_printfout("DBG send_client_cap_report_msg: ENTER sta=%s bss=%s msg_id=%u buff=%p MAX_EM_BUFF_SZ=%d",
-        mac_str, bss_str, msg_id, static_cast<void*>(buff), MAX_EM_BUFF_SZ);
+    mac_addr_str_t mac_str;
 
     memcpy(tmp, dm->get_ctl_mac(), sizeof(mac_address_t));
     tmp += sizeof(mac_address_t);
@@ -512,57 +489,23 @@ int em_capability_t::send_client_cap_report_msg(mac_address_t sta, bssid_t bss, 
     tmp += sizeof(em_cmdu_t);
     len += sizeof(em_cmdu_t);
 
-    em_printfout("DBG send_client_cap_report_msg: after headers len=%zu tmp_offset=%td",
-        len, tmp - buff);
-
     //Client Info  TLV 17.2.18
     tlv = reinterpret_cast<em_tlv_t *> (tmp);
     tlv->type = em_tlv_type_client_info;
     sz = create_client_info_tlv(tlv->value, sta, bss);
     tlv->len = htons(static_cast<uint16_t> (sz));
 
-    em_printfout("DBG send_client_cap_report_msg: client_info_tlv sz=%d (should be %zu)",
-        sz, 2 * sizeof(mac_address_t));
-    if (sz < 0) {
-        em_printfout("DBG send_client_cap_report_msg: FATAL client_info sz is negative!");
-        return -1;
-    }
-
     tmp += (sizeof(em_tlv_t) + static_cast<size_t> (sz));
     len += (sizeof(em_tlv_t) + static_cast<size_t> (sz));
-
-    em_printfout("DBG send_client_cap_report_msg: after client_info_tlv sz=%d len=%zu tmp_offset=%td",
-        sz, len, tmp - buff);
-    if (len > MAX_EM_BUFF_SZ) {
-        em_printfout("DBG send_client_cap_report_msg: FATAL len=%zu overflows buff[%d] after client_info_tlv",
-            len, MAX_EM_BUFF_SZ);
-        return -1;
-    }
 
     //Client Capability Report TLV 17.2.19
     tlv = reinterpret_cast<em_tlv_t *> (tmp);
     tlv->type = em_tlv_type_client_cap_report;
-    em_printfout("DBG send_client_cap_report_msg: calling create_client_cap_tlv, tlv->value=%p tmp_offset=%td",
-        static_cast<void*>(tlv->value), tmp - buff);
     sz = create_client_cap_tlv(tlv->value, sta, bss);
     tlv->len = htons(static_cast<uint16_t> (sz));
 
-    em_printfout("DBG send_client_cap_report_msg: client_cap_tlv sz=%d", sz);
-    if (sz < 0) {
-        em_printfout("DBG send_client_cap_report_msg: FATAL client_cap sz is negative! frame_body_len likely overflowed short");
-        return -1;
-    }
-    if ((len + sizeof(em_tlv_t) + static_cast<size_t>(sz)) > MAX_EM_BUFF_SZ) {
-        em_printfout("DBG send_client_cap_report_msg: FATAL len=%zu + tlv_hdr=%zu + sz=%d > MAX_EM_BUFF_SZ=%d after client_cap_tlv",
-            len, sizeof(em_tlv_t), sz, MAX_EM_BUFF_SZ);
-        return -1;
-    }
-
     tmp += (sizeof(em_tlv_t) + static_cast<size_t> (sz));
     len += (sizeof(em_tlv_t) + static_cast<size_t> (sz));
-
-    em_printfout("DBG send_client_cap_report_msg: after client_cap_tlv sz=%d len=%zu tmp_offset=%td",
-        sz, len, tmp - buff);
 
     //Error code  TLV 17.2.36
     tlv = reinterpret_cast<em_tlv_t *> (tmp);
@@ -570,22 +513,8 @@ int em_capability_t::send_client_cap_report_msg(mac_address_t sta, bssid_t bss, 
     sz = create_error_code_tlv(tlv->value, sta, bss);
     tlv->len = htons(static_cast<uint16_t> (sz));
 
-    em_printfout("DBG send_client_cap_report_msg: error_code_tlv sz=%d", sz);
-    if (sz < 0) {
-        em_printfout("DBG send_client_cap_report_msg: FATAL error_code sz is negative!");
-        return -1;
-    }
-    if ((len + sizeof(em_tlv_t) + static_cast<size_t>(sz)) > MAX_EM_BUFF_SZ) {
-        em_printfout("DBG send_client_cap_report_msg: FATAL len=%zu overflows buff[%d] after error_code_tlv",
-            len + sizeof(em_tlv_t) + static_cast<size_t>(sz), MAX_EM_BUFF_SZ);
-        return -1;
-    }
-
     tmp += (sizeof(em_tlv_t) + static_cast<size_t> (sz));
     len += (sizeof(em_tlv_t) + static_cast<size_t> (sz));
-
-    em_printfout("DBG send_client_cap_report_msg: after error_code_tlv sz=%d len=%zu tmp_offset=%td",
-        sz, len, tmp - buff);
 
     // End of message
     tlv = reinterpret_cast<em_tlv_t *> (tmp);
@@ -595,22 +524,16 @@ int em_capability_t::send_client_cap_report_msg(mac_address_t sta, bssid_t bss, 
     tmp += (sizeof (em_tlv_t));
     len += (sizeof (em_tlv_t));
 
-    em_printfout("DBG send_client_cap_report_msg: final len=%zu MAX_EM_BUFF_SZ=%d buff_end=%p tmp=%p",
-        len, MAX_EM_BUFF_SZ, static_cast<void*>(buff + MAX_EM_BUFF_SZ), static_cast<void*>(tmp));
-
     if (em_msg_t(em_msg_type_client_cap_rprt, em_profile_type_3, buff, static_cast<unsigned int> (len)).validate(errors) == 0) {
         em_printfout("Error: Client Capability Report msg validation failed in tnx end");
         return -1;
     }
-
-    em_printfout("DBG send_client_cap_report_msg: validation passed, calling send_frame len=%zu", len);
 
     if (send_frame(buff, static_cast<unsigned int> (len))  < 0) {
         em_printfout("Error: Client Capability Report msg send failed, error: %d", errno);
         return -1;
     }
 
-    em_printfout("DBG send_client_cap_report_msg: send_frame returned OK");
     dm_easy_mesh_t::macbytes_to_string(sta, mac_str);
     em_printfout("Client Capability Report msg sent successfully for sta: %s", mac_str);
 
@@ -1014,10 +937,6 @@ void em_capability_t::handle_client_cap_query(unsigned char *buff, unsigned int 
     unsigned int tmp_len;
     unsigned int tlv_sz;
     char *errors[EM_MAX_TLV_MEMBERS] = {0};
-    static unsigned int s_query_count = 0;
-
-    s_query_count++;
-    em_printfout("DBG handle_client_cap_query: ENTER call#%u len=%u", s_query_count, len);
 
     if (buff == NULL) {
         em_printfout("Client cap query: null buffer");
@@ -1065,15 +984,10 @@ void em_capability_t::handle_client_cap_query(unsigned char *buff, unsigned int 
     memcpy(bss, tlv->value, sizeof(bssid_t));
     memcpy(sta, tlv->value + sizeof(mac_address_t), sizeof(bssid_t));
 
-    em_printfout("DBG handle_client_cap_query: call#%u sta=%s bss=%s msg_id=%u",
-        s_query_count, util::mac_to_string(sta).c_str(),
-        util::mac_to_string(bss).c_str(), ntohs(cmdu->id));
-
     if (send_client_cap_report_msg(sta, bss, ntohs(cmdu->id)) < 0) {
         em_printfout("Client cap report send failed for sta=%s",
                 util::mac_to_string(sta).c_str());
     }
-    em_printfout("DBG handle_client_cap_query: call#%u send_client_cap_report_msg returned", s_query_count);
     set_state(em_state_agent_configured);
 }
 
@@ -1275,6 +1189,7 @@ int em_capability_t::handle_ap_radio_basic_cap(unsigned char *buff, unsigned int
 
 	memcpy(ruid, radio_basic_cap->ruid, sizeof(mac_address_t));
 	dm_easy_mesh_t::macbytes_to_string(ruid, mac_str);
+	em_printfout("AP Radio Basic Capability TLV ruid: %s op_class_num: %d", mac_str, radio_basic_cap->op_class_num);
 	for (i = 0; i < dm->get_num_radios(); i++) {
 		radio = dm->get_radio(i);
 		if (memcmp(radio->m_radio_info.intf.mac, ruid, sizeof(mac_address_t)) == 0) {
