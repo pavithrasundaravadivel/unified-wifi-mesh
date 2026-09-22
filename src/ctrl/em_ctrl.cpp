@@ -1209,6 +1209,22 @@ void em_ctrl_t::handle_client_steer(em_bus_event_t *evt)
     }
 }
 
+void em_ctrl_t::handle_client_assoc(em_bus_event_t *evt)
+{
+    em_cmd_t *pcmd[EM_MAX_CMD] = {NULL};
+    int num;
+
+    if (m_orch->is_cmd_type_in_progress(evt) == true) {
+        m_ctrl_cmd->send_result(em_cmd_out_status_prev_cmd_in_progress);
+    } else if ((num = m_data_model.analyze_client_assoc(evt, pcmd)) <= 0) {
+        m_ctrl_cmd->send_result(status_for_noncmd(num));
+    } else if (m_orch->submit_commands(pcmd, static_cast<unsigned int> (num)) > 0) {
+        m_ctrl_cmd->send_result(em_cmd_out_status_success);
+    } else {
+        m_ctrl_cmd->send_result(em_cmd_out_status_not_ready);
+    }
+}
+
 void em_ctrl_t::handle_client_disassoc(em_bus_event_t *evt)
 {
     em_cmd_t *pcmd[EM_MAX_CMD] = {NULL};
@@ -1881,6 +1897,10 @@ void em_ctrl_t::handle_bus_event(em_bus_event_t *evt)
            handle_unassoc_sta_metrics_query(evt);
            break;
 
+        case em_bus_event_type_client_assoc_ctrl_req:
+           handle_client_assoc(evt);
+           break;
+
         default:
             break;
     }
@@ -2064,14 +2084,12 @@ em_t *em_ctrl_t::find_em_for_msg_type(unsigned char *data, unsigned int len, em_
     em_freq_band_t band;
     dm_easy_mesh_t *dm;
     em_t *em = NULL;
-    mac_address_t ruid;
+    mac_address_t ruid, sta_mac;
     bssid_t	bssid;
-    dm_bss_t *bss;
     em_profile_type_t profile;
-    unsigned int i;
     mac_addr_str_t mac_str1 = {0}, mac_str2 = {0};
+    unsigned int i = 0;
     em_commit_info_t dm_commit = {};
-    mac_address_t fallback_ruid = {0};
     em_supported_service_t svc = {};
     uint8_t is_emplus;
 
@@ -2259,61 +2277,12 @@ em_t *em_ctrl_t::find_em_for_msg_type(unsigned char *data, unsigned int len, em_
         case em_msg_type_client_cap_rprt:
         case em_msg_type_ap_metrics_rsp:
         case em_msg_type_failed_conn:
-           if (em_msg_t(data + (sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t)),
+            if (em_msg_t(data + (sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t)),
                     len - static_cast<unsigned int> (sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t))).get_bss_id(&bssid) == false) {
-                printf("%s:%d: Could not find bss id in msg:0x%04x\n", __func__, __LINE__, htons(cmdu->type));
+                em_printfout("Could not find bss id in msg:0x%04x", htons(cmdu->type));
                 return NULL;
             }
-
-            if ((dm = get_data_model(GLOBAL_NET_ID, const_cast<const unsigned char *> (hdr->src))) == NULL) {
-                printf("%s:%d: Can not find data model\n", __func__, __LINE__);
-                return NULL;
-            }
-
-            if (dm->is_ap_mld_mac(bssid) == false) {
-                bss = NULL;
-                for (i = 0; i < dm->get_num_radios(); i++) {
-                    bss = dm->get_bss(dm->get_radio_info(i)->id.ruid, bssid);
-                    if (bss != NULL) {
-                        break;
-                    }
-                }
-
-                if (bss == NULL) {
-                    em_printfout("Could not find bss=%s from data model",
-                        util::mac_to_string(bssid).c_str());
-                    return NULL;
-                }
-
-                dm_easy_mesh_t::macbytes_to_string(bss->m_bss_info.ruid.mac, mac_str1);
-                if ((em = static_cast<em_t *>(hash_map_get(m_em_map, mac_str1))) == NULL) {
-                    em_printfout("Could not find radio:%s", mac_str1);
-                    return NULL;
-                }
-            } else {
-                if ((htons(cmdu->type) == em_msg_type_topo_notif) ||
-                    (htons(cmdu->type) == em_msg_type_client_cap_rprt)) {
-                    if (dm->resolve_ap_mld_to_fallback_ruid(bssid, fallback_ruid)) {
-                        dm_easy_mesh_t::macbytes_to_string(fallback_ruid, mac_str1);
-                        em = static_cast<em_t *>(hash_map_get(m_em_map, mac_str1));
-                        if (em != NULL) {
-                            em_printfout("Resolved AP-MLD bssid=%s to radio=%s for msg=0x%04x",
-                                util::mac_to_string(bssid).c_str(),
-                                util::mac_to_string(fallback_ruid).c_str(),
-                                htons(cmdu->type));
-                        }
-                    }
-                    if (em == NULL) {
-                        em_printfout("fallback em not found for msg 0x%04x", htons(cmdu->type));
-                        return NULL;
-                    }
-                } else {
-                    em_printfout("Could not find bss=%s from data model",
-                        util::mac_to_string(bssid).c_str());
-                    return NULL;
-                }
-            }
-
+            em = al_em;
             break;
 
         case em_msg_type_autoconf_resp:
@@ -2381,13 +2350,12 @@ em_t *em_ctrl_t::find_em_for_msg_type(unsigned char *data, unsigned int len, em_
             break;
 
         case em_msg_type_beacon_metrics_rsp:
-            em = static_cast<em_t *> (hash_map_get_first(m_em_map));
-            while(em != NULL) {
-                if ((em->is_al_interface_em() == false) && (em->has_at_least_one_associated_sta() == true)) {
-                    break;
-                }
-                em = static_cast<em_t *> (hash_map_get_next(m_em_map, em));
+            if (em_msg_t(data + (sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t)),
+                    len - static_cast<unsigned int> (sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t))).get_sta_mac(&sta_mac) == false) {
+                em_printfout("Could not find sta mac in msg:0x%04x", htons(cmdu->type));
+                return NULL;
             }
+            em = al_em;
             break;
 
         case em_msg_type_chirp_notif:
@@ -2503,6 +2471,9 @@ void em_ctrl_t::start_complete()
             { bus_data_type_property, false, 0, 0, 0, NULL } },
         { const_cast<char*>(DE_RADIO_CHSELREQ), bus_element_type_method,
             { NULL, NULL , NULL, NULL, NULL, tr_181_t::channelselect_handler}, slow_speed, ZERO_TABLE,
+            { bus_data_type_property, false, 0, 0, 0, NULL } },
+        { const_cast<char*>(DE_BSS_CLIENTASSOCCTRL), bus_element_type_method,
+            { NULL, NULL , NULL, NULL, NULL, tr_181_t::clientassocctrlrequest_handler}, slow_speed, ZERO_TABLE,
             { bus_data_type_property, false, 0, 0, 0, NULL } },
         { const_cast<char*>(DE_STA_CLIENTSTEER), bus_element_type_method,
             { NULL, NULL , NULL, NULL, NULL, tr_181_t::clientsteer_handler}, slow_speed, ZERO_TABLE,
@@ -2706,35 +2677,15 @@ int main(int argc, const char *argv[])
 #ifdef AL_SAP
     const char* data_socket_path = "/tmp/al_em_ctrl_data_socket";
     const char* control_socket_path = "/tmp/al_em_ctrl_control_socket";
-
-    if(0 == access(data_socket_path, F_OK) && 0 == access(control_socket_path, F_OK)) {
-        g_sap = em_ctrl->al_sap_register(data_socket_path, control_socket_path);
-        if (NULL == g_sap) {
-            em_printfout("%s-%d: Error in AL SAP registration, exiting", __func__, __LINE__);
-            return -1;
-        }
-    }
-    else {
-        em_printfout("%s-%d: Data Socket: %s, Control Socket: %s", __func__, __FILE__,
-	              access(data_socket_path, F_OK) == 0 ? "present" : "missing",
-                      access(control_socket_path, F_OK) == 0 ? "present" : "missing");
-        em_printfout("%s-%d: Required AL SAP socket(s) not available, exiting", __func__, __LINE__);
+    g_sap = em_ctrl->al_sap_register(data_socket_path, control_socket_path);
+    if (nullptr == g_sap) {
+        em_printfout("Error in AL SAP registration, exiting");
         return -1;
     }
 #endif
-
-#ifdef EM_WEBSOCKET_PUSH
-    /* Start the WebSocket ping-listener once for the whole program lifetime.
-     * It waits on select() until a connection is up, then keeps the session
-     * alive by answering server Ping frames with Pong throughout all topology
-     * send cycles and idle periods. */
-    em_topo_start_ping_listener();
-#endif
-
-    if (em_ctrl->init(data_model_path) == 0) {
+    if (em_ctrl->init(argv[1]) == 0) {
         em_ctrl->start();
     }
-
     return 0;
 }
 
