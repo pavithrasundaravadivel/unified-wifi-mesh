@@ -331,7 +331,7 @@ int em_configuration_t::send_client_disassoc_stats_msg(const dm_sta_t *dassoc_st
     unsigned short type = htons(ETH_P_1905);
     dm_easy_mesh_t *dm;
     em_assoc_sta_mld_info_t *mld_info = NULL;
-    dm_sta_t dassoc_stats_sta;
+    dm_sta_t dassoc_stats_sta(NULL);
     em_sta_info_t *dassoc_stats_sta_info;
     const em_sta_info_t *sta_info;
     mac_address_t sta_id = {0}, radio_mac = {0};

@@ -353,7 +353,6 @@ void em_t::proto_process(unsigned char *data, unsigned int len)
         case em_msg_type_ap_metrics_rsp:
         case em_msg_type_unassoc_sta_link_metrics_query: 
         case em_msg_type_unassoc_sta_link_metrics_rsp:      
-        case em_msg_type_topo_vendor:
             em_metrics_t::process_msg(data, len);
             break;
 
