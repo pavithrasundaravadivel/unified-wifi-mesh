@@ -22,7 +22,7 @@
 #include <cjson/cJSON.h>
 
 
-static bus_error_t rcv_wei_data_set_cb(char *event_name, raw_data_t *p_data, bus_user_data_t *user_data)
+/*static bus_error_t rcv_wei_data_set_cb(char *event_name, raw_data_t *p_data, bus_user_data_t *user_data)
 {
     if (!p_data || !p_data->raw_data.bytes || p_data->raw_data_len == 0) {
         em_printfout("rcv_wei_data_set_cb: empty payload on %s", event_name);
@@ -40,7 +40,7 @@ static bus_error_t rcv_wei_data_set_cb(char *event_name, raw_data_t *p_data, bus
     cJSON_Delete(parsed);
     if (json_str == NULL) return bus_error_general;
 
-    em_topo_stream_send_topology(json_str);
+    //em_topo_stream_send_topology(json_str);
 
     free(json_str);
     return bus_error_success;
@@ -72,4 +72,4 @@ namespace {
 struct auto_register_t {
     auto_register_t() { em_register_bus_ready_hook(subscription_init); }
 } g_auto_register;// <-- constructor runs at static-init time, calls the register fn
-}
+}*/

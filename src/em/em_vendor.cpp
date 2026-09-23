@@ -94,8 +94,10 @@ int em_vendor_t::handle_vendor_tlv_ext(const unsigned char *tlv_value,
                                         dm_easy_mesh_t      *dm)
 {
     if (m_vendor_ext) {
+        em_printfout("Coming here %s:%d\n", __func__, __LINE__);
         return m_vendor_ext->handle_vendor_tlv_ext(tlv_value, tlv_len, dm);
     }
+    em_printfout("Coming here %s:%d\n", __func__, __LINE__);
     return 0; // Default base fallback
 }
 
