@@ -22,6 +22,8 @@ AM_CFLAGS += -D_ANSC_LITTLE_ENDIAN_
 ACLOCAL_AMFLAGS = -I m4
 hardware_platform = i686-linux-gnu
 
+# custom.mk expects ONEWIFI_EM_HOME (only set by build/makefile.inc for plain make)
+ONEWIFI_EM_HOME = $(top_srcdir)
 include $(top_srcdir)/custom/custom.mk
 
 bin_PROGRAMS = onewifi_em_ctrl
