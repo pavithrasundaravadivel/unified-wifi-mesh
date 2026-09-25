@@ -8,10 +8,16 @@ CFLAGS   += -I$(CUSTOM_INC_DIR)
 # (Optional) If using standard local Make variables instead of OpenWrt build targets:
 # INCLUDES += -I$(CUSTOM_INC_DIR)
 
+# Listed explicitly rather than via $(wildcard): Automake parses _SOURCES
+# statically when generating Makefile.in and can't see wildcard results,
+# so new files here must also be added to these lists by hand.
+CUSTOM_COMMON_SOURCES = \
+    $(ONEWIFI_EM_HOME)/custom/src/common/lq_socket.cpp
+
 CUSTOM_AGENT_SOURCES = \
-    $(wildcard $(ONEWIFI_EM_HOME)/custom/src/common/*.cpp) \
-    $(wildcard $(ONEWIFI_EM_HOME)/custom/src/agent/*.cpp)
+    $(CUSTOM_COMMON_SOURCES)
 
 CUSTOM_CTRL_SOURCES = \
-    $(wildcard $(ONEWIFI_EM_HOME)/custom/src/common/*.cpp) \
-    $(wildcard $(ONEWIFI_EM_HOME)/custom/src/ctrl/*.cpp)
+    $(CUSTOM_COMMON_SOURCES) \
+    $(ONEWIFI_EM_HOME)/custom/src/ctrl/vendor_ctrl.cpp \
+    $(ONEWIFI_EM_HOME)/custom/src/ctrl/vendor_subscription.cpp
