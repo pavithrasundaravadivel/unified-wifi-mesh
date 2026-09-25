@@ -3,7 +3,7 @@
 #include <sys/time.h>
 #include <stdint.h>  /* Defines uint8_t, uint16_t, uint32_t, etc. */
 #include <stddef.h>  /* Defines size_t */
-
+#include "wifi_base.h"
 
 #define LQ_STATS_SOCKET_PATH "/tmp/linkquality_stats.sock"
 
