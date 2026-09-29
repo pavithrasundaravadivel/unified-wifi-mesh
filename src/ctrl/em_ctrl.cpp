@@ -2391,7 +2391,8 @@ em_t *em_ctrl_t::find_em_for_msg_type(unsigned char *data, unsigned int len, em_
         case em_msg_type_topo_vendor:
             em = static_cast<em_t *> (hash_map_get_first(m_em_map));
             while(em != NULL) {
-                if (em->is_al_interface_em() == false) {
+                if ((em->is_al_interface_em() == false) &&
+                    (memcmp(em->get_data_model()->get_agent_al_interface_mac(), hdr->src, sizeof(mac_address_t)) == 0)) {
                     break;
                 }
                 em = static_cast<em_t *> (hash_map_get_next(m_em_map, em));
