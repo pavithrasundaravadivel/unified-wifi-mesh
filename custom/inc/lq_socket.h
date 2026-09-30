@@ -5,7 +5,7 @@
 #include <stddef.h>  /* Defines size_t */
 #include "wifi_base.h"
 
-#define LQ_STATS_SOCKET_PATH "/tmp/linkquality_stats.sock"
+#define LQ_STATS_SOCKET_PATH "/tmp/linkquality_stats_em.sock"
 
 #define LQ_IPC_MSG_PERIODIC_STATS    1
 #define LQ_IPC_MSG_DISCONNECT        2
@@ -68,4 +68,4 @@ typedef struct {
     uint8_t  value[];
 } __attribute__((__packed__)) lq_tlv_t;
 
-int lq_ipc_send_wei_data(uint32_t msg_type, const wei_data_t *entries, uint32_t count);
+int lq_ipc_send_wei_data(uint32_t msg_type, const stats_arg_t *entries, uint32_t count);
