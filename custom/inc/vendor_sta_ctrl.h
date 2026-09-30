@@ -29,6 +29,6 @@ public:
                                dm_easy_mesh_t      *dm) override;
 
 private:
-    void publish_wei_app(wei_data_t wei_data);
+    void publish_wei_app(stats_arg_t wei_data);
     // static void wei_app_cb();
 };

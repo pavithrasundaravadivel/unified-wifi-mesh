@@ -72,7 +72,7 @@ static const char *lq_msg_type_str(uint32_t type)
     }
 }
 
-static void lq_ipc_log_wei_entries(uint32_t msg_type, const wei_data_t *entries, uint32_t count)
+static void lq_ipc_log_wei_entries(uint32_t msg_type, const stats_arg_t *entries, uint32_t count)
 {
     if (!entries || count == 0) return;
 
@@ -89,11 +89,11 @@ static void lq_ipc_log_wei_entries(uint32_t msg_type, const wei_data_t *entries,
     }
 }
 
-/* Encode wei_data_t payload as an lq_tlv_t packet over UDS */
-static int build_tlv(uint32_t msg_type, const wei_data_t *entries,
+/* Encode stats_arg_t payload as an lq_tlv_t packet over UDS */
+static int build_tlv(uint32_t msg_type, const stats_arg_t *entries,
                      uint32_t count, uint8_t *buf, size_t buf_sz)
 {
-    size_t data_sz = count * sizeof(wei_data_t);
+    size_t data_sz = count * sizeof(stats_arg_t);
     size_t needed  = sizeof(lq_tlv_t) + data_sz;
 
     if (needed > buf_sz) {
@@ -119,12 +119,12 @@ static int build_tlv(uint32_t msg_type, const wei_data_t *entries,
     return static_cast<int>(needed);
 }
 
-/* Main send function to transfer wei_data_t structures over UNIX Domain Socket */
-int lq_ipc_send_wei_data(uint32_t msg_type, const wei_data_t *entries, uint32_t count)
+/* Main send function to transfer stats_arg_t structures over UNIX Domain Socket */
+int lq_ipc_send_wei_data(uint32_t msg_type, const stats_arg_t *entries, uint32_t count)
 {
     em_printfout("%s:%d [UDS-SEND] Sending msg_type=%s(%u) count=%u total_size=%zu",
         __func__, __LINE__, lq_msg_type_str(msg_type), msg_type,
-        count, count * sizeof(wei_data_t));
+        count, count * sizeof(stats_arg_t));
 
     if (count > 0 && entries == NULL) {
         em_printfout("%s:%d [UDS-SEND] Error: null entries pointer with non-zero count", __func__, __LINE__);
@@ -142,7 +142,7 @@ int lq_ipc_send_wei_data(uint32_t msg_type, const wei_data_t *entries, uint32_t 
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, LQ_STATS_SOCKET_PATH, sizeof(addr.sun_path) - 1);
 
-    size_t data_sz  = static_cast<size_t>(count) * sizeof(wei_data_t);
+    size_t data_sz  = static_cast<size_t>(count) * sizeof(stats_arg_t);
     size_t alloc_sz = sizeof(lq_tlv_t) + data_sz;
     uint8_t *buf = static_cast<uint8_t *>(malloc(alloc_sz));
     if (!buf) {

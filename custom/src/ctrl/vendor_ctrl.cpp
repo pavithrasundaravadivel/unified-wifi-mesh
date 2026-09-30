@@ -50,7 +50,7 @@ int em_vendor_ctrl_t::handle_vendor_tlv_ext(const unsigned char *tlv_value,
         return 0;
     }
 
-    const wei_data_t *wei_data = reinterpret_cast<const wei_data_t *>(vendor_data_ptr->vendor_data);
+    const stats_arg_t *wei_data = reinterpret_cast<const stats_arg_t *>(vendor_data_ptr->vendor_data);
 
     mac_addr_t sta_mac;
     dm_easy_mesh_t::string_to_macbytes(const_cast<char *>(wei_data->mac_str), sta_mac);
@@ -120,7 +120,7 @@ int em_vendor_ctrl_t::handle_vendor_tlv_ext(const unsigned char *tlv_value,
     return 0;
 }
 
-void em_vendor_ctrl_t::publish_wei_app(wei_data_t wei_data) {
+void em_vendor_ctrl_t::publish_wei_app(stats_arg_t wei_data) {
     // Implementation of publish_wei_app
 
     em_printfout("Publishing wei app for sta[%s]", wei_data.mac_str);
