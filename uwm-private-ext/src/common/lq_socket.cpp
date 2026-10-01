@@ -54,24 +54,6 @@ static int lq_ipc_open_fd(void)
     return 0;
 }
 
-static const char *lq_msg_type_str(uint32_t type)
-{
-    switch (type) {
-    case LQ_IPC_MSG_PERIODIC_STATS:   return "PERIODIC_STATS";
-    case LQ_IPC_MSG_DISCONNECT:       return "DISCONNECT";
-    case LQ_IPC_MSG_RAPID_DISCONNECT: return "RAPID_DISCONNECT";
-    case LQ_IPC_MSG_CAFFINITY_EVENT:  return "CAFFINITY_EVENT";
-    case LQ_IPC_MSG_START_METRICS:    return "START_METRICS";
-    case LQ_IPC_MSG_STOP_METRICS:     return "STOP_METRICS";
-    case LQ_IPC_MSG_REGISTER_STA:     return "REGISTER_STA";
-    case LQ_IPC_MSG_UNREGISTER_STA:   return "UNREGISTER_STA";
-    case LQ_IPC_MSG_REINIT_METRICS:   return "REINIT_METRICS";
-    case LQ_IPC_MSG_SET_MAX_SNR:      return "SET_MAX_SNR";
-    case LQ_IPC_MSG_SET_SCORE_PARAMS: return "SET_SCORE_PARAMS";
-    default:                          return "UNKNOWN";
-    }
-}
-
 static void lq_ipc_log_wei_entries(uint32_t msg_type, const stats_arg_t *entries, uint32_t count)
 {
     if (!entries || count == 0) return;
