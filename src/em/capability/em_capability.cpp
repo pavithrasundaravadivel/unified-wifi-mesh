@@ -934,6 +934,9 @@ int em_capability_t::handle_client_cap_report(unsigned char *buff, unsigned int 
         dm->apply_sta_cap_to_maps(key, &sta_info);
     }
 
+    // Re-arm the publish flag so this client's topo_publish isn't skipped: in the
+    // serialized multi-client flow a prior client's topo_publish already cleared it.
+    dm->set_topo_state(true);
     dm->set_db_cfg_param(db_cfg_type_sta_list_update, "");
     return 0;
 }
