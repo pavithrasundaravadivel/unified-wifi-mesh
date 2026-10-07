@@ -1067,7 +1067,7 @@ int em_metrics_t::handle_ap_metrics_response(unsigned char *buff, unsigned int l
                         em_printfout("unknown Airties vendor tlv_id 0x%04x, skipping TLV", tlv_id);
                     }
                 } else {
-                    if (handle_assoc_sta_vendor_link_metrics_tlv(tlv->value, len) != 0) {
+                    if (handle_assoc_sta_vendor_link_metrics_tlv(tlv->value, len, true) != 0) {
                         em_printfout("assoc_sta_vendor_link_metrics_tlv failed, skipping TLV");
                     }
                 }
