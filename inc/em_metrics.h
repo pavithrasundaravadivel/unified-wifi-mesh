@@ -238,6 +238,8 @@ class em_metrics_t {
 	 *
 	 * @param[in] buff Pointer to the buffer containing the TLV data.
 	 * @param[in] len Length of the data in the buffer.
+	 * @param[in] notify_topology Send a topology notification when this TLV
+	 *            provides the client's type for the first time.
 	 *
 	 * @returns int Status code indicating success or failure.
 	 * @retval 0 on success.
@@ -245,7 +247,8 @@ class em_metrics_t {
 	 *
 	 * @note Ensure that the buffer is properly allocated and contains valid TLV data.
 	 */
-	int handle_assoc_sta_vendor_link_metrics_tlv(unsigned char *buff, unsigned int len);
+	int handle_assoc_sta_vendor_link_metrics_tlv(unsigned char *buff, unsigned int len,
+		bool notify_topology = false);
     
 	/**!
 	 * @brief Handles the beacon metrics query.
@@ -304,6 +307,8 @@ class em_metrics_t {
 	 *
 	 * @param[in] buff Pointer to the buffer containing the response data.
 	 * @param[in] len Length of the data in the buffer.
+	 * @param[in] peer_profile Profile of the peer that sent the response; em_profile_type_reserved
+	 * (unknown) is validated as em_profile_type_1.
 	 *
 	 * @returns int Status code indicating success or failure of the operation.
 	 * @retval 0 on success.
@@ -311,7 +316,7 @@ class em_metrics_t {
 	 *
 	 * @note Ensure that the buffer is properly allocated and the length is correctly specified.
 	 */
-	int handle_ap_metrics_response(unsigned char *buff, unsigned int len);
+	virtual int handle_ap_metrics_response(unsigned char *buff, unsigned int len, em_profile_type_t peer_profile);
 	int handle_vendor_msg(unsigned char *buff, unsigned int len);
   	/**!
 	 * @brief Handles the AP metrics tlv.
