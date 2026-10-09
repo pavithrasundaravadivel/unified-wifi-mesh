@@ -985,6 +985,11 @@ int em_metrics_t::handle_ap_metrics_response(unsigned char *buff, unsigned int l
 
     dm = get_data_model();
 
+    if (len < sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t)) {
+        em_printfout("Frame shorter than the 1905 headers");
+        return -1;
+    }
+
     em_profile_type_t validation_profile = peer_profile;
     if (validation_profile == em_profile_type_reserved) {
         validation_profile = get_profile_type();
@@ -992,12 +997,7 @@ int em_metrics_t::handle_ap_metrics_response(unsigned char *buff, unsigned int l
 
     if (em_msg_t(em_msg_type_ap_metrics_rsp, validation_profile, buff, len).validate(errors) == 0) {
         em_printfout("%s:%d: AP Metrics metrics response msg validation failed\n", __func__, __LINE__);
-        //return -1;
-    }
-
-    if (len < sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t)) {
-        em_printfout("Frame shorter than the 1905 headers");
-        //return -1;
+        return -1;
     }
 
     tlv_start =  reinterpret_cast<em_tlv_t *> (buff + sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t));
