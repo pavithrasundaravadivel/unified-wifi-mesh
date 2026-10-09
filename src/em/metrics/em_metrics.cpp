@@ -37,7 +37,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <openssl/rand.h>
-#include <unordered_set>
+#include <set>
 #include "em_metrics.h"
 #include "em_msg.h"
 #include "dm_easy_mesh.h"
@@ -985,18 +985,15 @@ int em_metrics_t::handle_ap_metrics_response(unsigned char *buff, unsigned int l
 
     dm = get_data_model();
 
-    if (len < sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t)) {
-        em_printfout("Frame shorter than the 1905 headers");
-        return -1;
-    }
-
-    em_profile_type_t validation_profile = peer_profile;
-    if (validation_profile == em_profile_type_reserved) {
-        validation_profile = get_profile_type();
-    }
+    em_profile_type_t validation_profile = (peer_profile == em_profile_type_reserved) ? em_profile_type_1 : peer_profile;
 
     if (em_msg_t(em_msg_type_ap_metrics_rsp, validation_profile, buff, len).validate(errors) == 0) {
         em_printfout("%s:%d: AP Metrics metrics response msg validation failed\n", __func__, __LINE__);
+        return -1;
+    }
+
+    if (len < sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t)) {
+        em_printfout("Frame shorter than the 1905 headers");
         return -1;
     }
 
@@ -2812,11 +2809,17 @@ void em_metrics_t::process_msg(unsigned char *data, unsigned int len)
         case em_msg_type_ap_metrics_rsp: {
             em_radios.clear();
             get_mgr()->get_all_em_for_al_mac(hdr->src, em_radios);
-            std::unordered_set<dm_easy_mesh_t *> processed_data_models;
+            em_profile_type_t peer_profile = em_profile_type_reserved;
             for (auto &em : em_radios) {
-                dm_easy_mesh_t *data_model = em->get_data_model();
-                if (data_model != nullptr && processed_data_models.insert(data_model).second) {
-                    em->handle_ap_metrics_response(data, len, em->get_peer_profile());
+                if (em->get_peer_profile() != em_profile_type_reserved) {
+                    peer_profile = em->get_peer_profile();
+                    break;
+                }
+            }
+            std::set<dm_easy_mesh_t *> handled_dms;
+            for (auto &em : em_radios) {
+                if (handled_dms.insert(em->get_data_model()).second) {
+                    em->handle_ap_metrics_response(data, len, peer_profile);
                 }
             }
             break;
