@@ -224,6 +224,7 @@ int dm_network_list_t::sync_db(db_client_t& db_client, void *ctx)
 		dm_easy_mesh_t::string_to_macbytes(mac, info.colocated_agent_id.mac);
 
 		info.media = static_cast<em_media_type_t> (db_client.get_number(ctx, 4));
+		em_printfout("Network:%s loaded media from DB:0x%x", info.id, static_cast<unsigned int>(info.media));
 
 		info.ctrl_id.media = info.media;
 		info.colocated_agent_id.media = info.media;
