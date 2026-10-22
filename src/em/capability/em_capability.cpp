@@ -1102,7 +1102,7 @@ int em_capability_t::handle_client_info(unsigned char *tlv_buff, unsigned int tl
     if (dm->get_colocated() != true) {
         em_printfout("Client info: dev:%s sta:%s upstream bssid:%s",
             util::mac_to_string(dm->m_device.m_device_info.intf.mac).c_str(),
-            util::mac_to_string(client_info->client_mac_addr).c_str(), util::mac_to_string(client_info->bssid).c_str()); the bSTA is associated to (Backhaul.MACAddress)
+            util::mac_to_string(client_info->client_mac_addr).c_str(), util::mac_to_string(client_info->bssid).c_str()); //the bSTA is associated to (Backhaul.MACAddress)
         memcpy(dm->m_device.m_device_info.backhaul_mac.mac, client_info->bssid, sizeof(mac_address_t));
         dm->set_db_cfg_param(db_cfg_type_device_list_update, "");
     }
