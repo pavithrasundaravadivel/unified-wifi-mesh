@@ -150,7 +150,7 @@ em_network_topo_t *em_network_topo_t::find_topology_by_bh_associated(dm_easy_mes
 
 	std::string dev_mac_str = util::mac_to_string(dm->m_device.m_device_info.intf.mac);
 	// Obtain the mesh_sta information of this dm.
-	em_bss_info_t *bss = dm->get_bsta_bss_info();
+	em_bss_info_t *bss = dm->get_associated_bsta_bss_info();
 	if (bss == NULL) {
 		em_printfout("Backhaul sta bss not found for dev_mac:%s, return NULL", dev_mac_str.c_str());
 		dm->m_device.m_device_info.backhaul_mac.media = em_media_type_ieee8023ab;

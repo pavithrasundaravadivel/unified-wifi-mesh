@@ -221,6 +221,8 @@ void dm_device_t::encode(cJSON *obj, bool summary)
 			strncpy(media_str, "Wireless LAN", strlen("Wireless LAN") + 1);
 			break;
 	}
+    em_printfout("Device:%s backhaul_mac:%s backhaul media:0x%x encoded as MediaType:%s", util::mac_to_string(m_device_info.intf.mac).c_str(),
+        mac_str, static_cast<unsigned int>(m_device_info.backhaul_mac.media), media_str);
     cJSON_AddStringToObject(bh_obj, "MediaType", media_str);
 
     if (summary == true) {
