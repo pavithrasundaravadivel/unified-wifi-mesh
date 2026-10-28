@@ -2955,7 +2955,7 @@ void em_metrics_t::process_msg(unsigned char *data, unsigned int len)
         case em_msg_type_topo_vendor:
             handle_vendor_msg(data, len);
             break;
-        }
+
         case em_msg_type_unassoc_sta_link_metrics_query:
             handle_unassoc_sta_link_metrics_query(data, len);
             break;
