@@ -50,7 +50,7 @@ LDFLAGS = $(LIBDIRS) $(LIBS)
 LIBDIRS = \
 	-L$(INSTALLDIR)/lib \
 
-LIBS = -lemcli -luuid -lm -lpthread -ldl -lcjson -lreadline -lssl -lcrypto -I$(STAGING_DIR)/usr/lib -lsqlite3
+LIBS = -lemcli -luuid -lm -lpthread -ldl -lcjson -lreadline -lssl -lcrypto -I$(STAGING_DIR)/usr/lib -lmariadb
 
 GENERIC_SOURCES = $(ONEWIFI_HOME)/source/utils/collection.c	\
                   $(ONEWIFI_EM_SRC)/util_crypto/aes_siv.c \

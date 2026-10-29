@@ -42,6 +42,7 @@ INCLUDEDIRS = \
 	-I$(ONEWIFI_HOME)/source/platform/linux/he_bus/inc \
 	-I$(ONEWIFI_HOME)/source/ccsp \
 	-I$(STAGING_DIR)/usr/include \
+	-I$(STAGING_DIR)/usr/include/mysql \
 
 ifeq ($(WITH_SAP), 1)
 INCLUDEDIRS += -I$(AL_SAP_HOME)/include
@@ -84,7 +85,7 @@ else
 LIBDIRS += -L$(INSTALLDIR)/lib/platform/darwin
 endif
 
-LIBS = -lm -pthread -ldl -luuid -lcjson -lssl -lcrypto -lhebus -lsqlite3 -lstdc++fs
+LIBS = -lm -pthread -ldl -luuid -lcjson -lssl -lcrypto -lhebus -lmariadb -lstdc++fs
 
 ifeq ($(WITH_SAP), 1)
 LIBS += -lalsap

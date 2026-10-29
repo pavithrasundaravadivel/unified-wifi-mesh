@@ -19,8 +19,13 @@
 #ifndef DB_CLIENT_H
 #define DB_CLIENT_H
 
-#include <sqlite3.h>
-#include <mutex>
+#if defined(OPENWRT_BUILD) || defined(RDKB_BUILD)
+// MariaDB C client header for cross-compiled builds (OpenWRT / RDKB), where headers are under <mysql/>
+#include <mysql/mysql.h>
+#else
+// MariaDB C client header for a standard Linux install (Debian)
+#include <mariadb/mysql.h>
+#endif
 
  /**!
   * @brief Database client class to manage database connections and queries.
@@ -31,9 +36,8 @@
   * @note This class is not thread-safe.
   */
  class db_client_t {
-sqlite3 *m_con;
-char m_path[512];
-std::mutex m_mutex;
+	MYSQL *m_con;    ///< MariaDB connection instance
+
 
 	 /**!
 	  * @brief Establish a connection to the database.
@@ -64,7 +68,7 @@ std::mutex m_mutex;
 	  * specified by the given path. It must be called before any other database
 	  * operations are performed.
 	  *
-	  * @param[in] path Path to the SQLite database file. When null or empty, the default deployment path is used.
+	  * @param[in] path Path to the database in the format "username@password".
 	  *
 	  * @returns 0 on success, non-zero on failure.
 	  * @retval 0 Initialization successful.
@@ -162,10 +166,6 @@ std::mutex m_mutex;
 	  * @note Use with caution as this will erase all existing data.
 	  */
 	 int recreate_db();
-
-	 int begin_transaction();
-	 int commit();
-	 int rollback();
 
 
 	 /**!
