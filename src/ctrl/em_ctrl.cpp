@@ -1016,6 +1016,51 @@ int em_ctrl_t::orch_init()
     return 0;
 }
 
+em_t *em_ctrl_t::get_or_create_radio_em(dm_easy_mesh_t *dm, const unsigned char *ruid)
+{
+    if (dm == nullptr || ruid == nullptr) {
+        return nullptr;
+    }
+
+    mac_addr_str_t radio_mac;
+    dm_easy_mesh_t::macbytes_to_string(ruid, radio_mac);
+    auto em = static_cast<em_t *>(hash_map_get(m_em_map, radio_mac));
+    if (em != nullptr && em->get_data_model() != dm) {
+        mac_addr_str_t old_al_mac = {};
+        mac_addr_str_t new_al_mac;
+        dm_easy_mesh_t *old_dm = em->get_data_model();
+        if (old_dm != nullptr) {
+            dm_easy_mesh_t::macbytes_to_string(old_dm->get_agent_al_interface_mac(), old_al_mac);
+        } else {
+            strncpy(old_al_mac, "<unknown>", sizeof(old_al_mac) - 1);
+        }
+        dm_easy_mesh_t::macbytes_to_string(dm->get_agent_al_interface_mac(), new_al_mac);
+        em_printfout("Replacing radio %s owned by AL %s with AL %s",
+            radio_mac, old_al_mac, new_al_mac);
+
+        em_interface_t radio = {};
+        memcpy(radio.mac, ruid, sizeof(mac_address_t));
+        delete_node(&radio);
+        em = static_cast<em_t *>(hash_map_get(m_em_map, radio_mac));
+        if (em != nullptr) {
+            em_printfout("Failed to remove stale EM for radio %s", radio_mac);
+            return nullptr;
+        }
+    }
+
+    if (em == nullptr) {
+        em_interface_t radio = {};
+        memcpy(radio.mac, ruid, sizeof(mac_address_t));
+        em = create_node(&radio, em_freq_band_unknown, dm, false,
+            dm->get_device()->m_device_info.profile, em_service_type_ctrl);
+        if (em == nullptr) {
+            em_printfout("Failed to create EM for radio %s", radio_mac);
+        }
+    }
+
+    return em;
+}
+
 em_t *em_ctrl_t::find_em_for_msg_type(unsigned char *data, unsigned int len, em_t *al_em)
 {
     em_raw_hdr_t *hdr;
@@ -1138,44 +1183,24 @@ em_t *em_ctrl_t::find_em_for_msg_type(unsigned char *data, unsigned int len, em_
 		    return NULL;
 	    }
 
-	    dm_easy_mesh_t::macbytes_to_string(ruid, mac_str1);
-	    em_printfout("[%s %d] Extracted ruid from M1: %s\n", __func__, __LINE__, mac_str1);
+            dm = get_data_model(GLOBAL_NET_ID, const_cast<const unsigned char *>(hdr->src));
+            if (dm == nullptr) {
+                em_printfout("Cannot find data model for WSC M1 source AL MAC %s",
+                    util::mac_to_string(hdr->src).c_str());
+                return nullptr;
+            }
 
-	    if ((em = static_cast<em_t *> (hash_map_get(m_em_map, mac_str1))) != NULL) {
-		    em_printfout("[%s %d] Found EXISTING radio entry for ruid:%s, current state:%d\n",
-				    __func__, __LINE__, mac_str1, em->get_state());
-
-		    if (em->get_state() != em_state_ctrl_wsc_m2_sent) {
-			    em_printfout("[%s %d] Setting state to em_state_ctrl_wsc_m1_pending for ruid:%s\n",
-					    __func__, __LINE__, mac_str1);
-			    em->set_state(em_state_ctrl_wsc_m1_pending);
-		    } else {
-			    em_printfout("[%s %d] IGNORING M1 - Autoconf wsc msg (M2) already sent for ruid:%s. Incorrect state = (%d)\n",
-					    __func__, __LINE__, mac_str1, em->get_state());
-		    }
-	    } else {
-		    em_printfout("[%s %d] No existing radio entry for ruid:%s, looking up data model by frame src:%s\n",
-				    __func__, __LINE__, mac_str1, mac_str2);
-
-		    if ((dm = get_data_model(GLOBAL_NET_ID, const_cast<const unsigned char *> (hdr->src))) == NULL) {
-			    em_printfout("[%s %d] FAILED - Can not find data model for src mac:%s (ruid:%s dropped here)\n",
-					    __func__, __LINE__, mac_str2, mac_str1);
-			    break;
-		    }
-
-		    em_printfout("[%s %d] Found data model for mac: %s, creating node for ruid: %s\n",
-				    __func__, __LINE__, mac_str2, mac_str1);
-
-		    memcpy(intf.mac, ruid, sizeof(mac_address_t));
-		    if ((em = create_node(&intf, em_freq_band_unknown, dm, false,  dm->get_device()->m_device_info.profile,
-						    em_service_type_ctrl)) != NULL) {
-			    em_printfout("[%s %d] create_node SUCCESS for ruid:%s, setting state em_state_ctrl_wsc_m1_pending\n",
-					    __func__, __LINE__, mac_str1);
-			    em->set_state(em_state_ctrl_wsc_m1_pending);
-		    } else {
-			    em_printfout("[%s %d] create_node FAILED for ruid:%s\n", __func__, __LINE__, mac_str1);
-		    }
-	    }
+            dm_easy_mesh_t::macbytes_to_string(ruid, mac_str1);
+            em = get_or_create_radio_em(dm, ruid);
+            if (em == nullptr) {
+                return nullptr;
+            }
+            if (em->get_state() != em_state_ctrl_wsc_m2_sent) {
+                em->set_state(em_state_ctrl_wsc_m1_pending);
+            } else {
+                em_printfout("Autoconfig WSC M2 already sent for radio %s, state %d",
+                    mac_str1, em->get_state());
+            }
 
 	    break;
         case em_msg_type_channel_sel_rsp:
@@ -1205,9 +1230,10 @@ em_t *em_ctrl_t::find_em_for_msg_type(unsigned char *data, unsigned int len, em_
             for (i = 0; i < dm->get_num_radios(); i++) {
                 dm_easy_mesh_t::macbytes_to_string(dm->get_radio_info(i)->id.ruid, mac_str1);
                 em = static_cast<em_t *>(hash_map_get(m_em_map, mac_str1));
-                if (em != NULL) {
+                if (em != NULL && em->get_data_model() == dm) {
                     break;
                 }
+                em = NULL;
             }
             if (em == NULL) {
                 em_printfout("No EM found for agent AL MAC %s", util::mac_to_string(hdr->src).c_str());

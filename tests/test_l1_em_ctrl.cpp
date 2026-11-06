@@ -19,10 +19,80 @@
 #include <sanitizer/lsan_interface.h>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <arpa/inet.h>
 #include <stdio.h>
 #include <cstring>
+#include <vector>
 #include "em_ctrl.h"
 #include "em_crypto.h"
+
+TEST(em_ctrl_t, AutoconfigM1RebindsRadioToSourceDataModel)
+{
+    em_ctrl_t ctrl;
+    struct ScopedLeakSuppression {
+        ScopedLeakSuppression() { __lsan_disable(); }
+        ~ScopedLeakSuppression() { __lsan_enable(); }
+    } suppression;
+
+    ASSERT_EQ(ctrl.init(":memory:"), 0);
+
+    em_interface_t old_agent = {};
+    em_interface_t current_agent = {};
+    em_interface_t radio = {};
+    old_agent.mac[5] = 0x46;
+    current_agent.mac[5] = 0xea;
+    radio.mac[0] = 0xd8;
+    radio.mac[5] = 0xb7;
+
+    dm_easy_mesh_t *old_dm = ctrl.create_data_model(GLOBAL_NET_ID, &old_agent);
+    dm_easy_mesh_t *current_dm = ctrl.create_data_model(GLOBAL_NET_ID, &current_agent);
+    ASSERT_NE(old_dm, nullptr);
+    ASSERT_NE(current_dm, nullptr);
+    for (dm_easy_mesh_t *dm : {old_dm, current_dm}) {
+        dm->set_num_radios(1);
+        memcpy(dm->get_radio_info(0)->id.ruid, radio.mac, sizeof(mac_address_t));
+    }
+
+    ASSERT_NE(ctrl.create_node(&radio, em_freq_band_unknown, old_dm, false,
+        em_profile_type_3, em_service_type_ctrl), nullptr);
+
+    auto make_message = [&](unsigned short type) {
+        std::vector<unsigned char> data(sizeof(em_raw_hdr_t) + sizeof(em_cmdu_t) +
+            2 * sizeof(em_tlv_t) + sizeof(mac_address_t), 0);
+        em_raw_hdr_t hdr = {};
+        hdr.type = htons(ETH_P_1905);
+        memcpy(hdr.src, current_agent.mac, sizeof(mac_address_t));
+        memcpy(data.data(), &hdr, sizeof(hdr));
+
+        em_cmdu_t cmdu = {};
+        cmdu.type = htons(type);
+        memcpy(data.data() + sizeof(hdr), &cmdu, sizeof(cmdu));
+
+        em_tlv_t radio_id = {};
+        radio_id.type = em_tlv_type_radio_id;
+        radio_id.len = htons(sizeof(mac_address_t));
+        size_t offset = sizeof(hdr) + sizeof(cmdu);
+        memcpy(data.data() + offset, &radio_id, sizeof(radio_id));
+        offset += sizeof(radio_id);
+        memcpy(data.data() + offset, radio.mac, sizeof(mac_address_t));
+        offset += sizeof(mac_address_t);
+
+        em_tlv_t eom = {};
+        memcpy(data.data() + offset, &eom, sizeof(eom));
+        return data;
+    };
+
+    std::vector<unsigned char> topo_resp = make_message(em_msg_type_topo_resp);
+    EXPECT_EQ(ctrl.find_em_for_msg_type(topo_resp.data(), topo_resp.size(), nullptr), nullptr);
+
+    std::vector<unsigned char> wsc_m1 = make_message(em_msg_type_autoconf_wsc);
+    em_t *current_em = ctrl.find_em_for_msg_type(wsc_m1.data(), wsc_m1.size(), nullptr);
+    ASSERT_NE(current_em, nullptr);
+    EXPECT_EQ(current_em->get_data_model(), current_dm);
+    EXPECT_EQ(ctrl.find_em_for_msg_type(topo_resp.data(), topo_resp.size(), nullptr), current_em);
+
+    ctrl.delete_node(&radio);
+}
 
 class em_ctrl_t_Test : public ::testing::Test {
 protected:

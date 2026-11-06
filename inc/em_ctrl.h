@@ -67,6 +67,8 @@ class em_ctrl_t : public em_mgr_t {
 	 */
 	void handle_nb_event(em_nb_event_t *evt);
 
+	em_t *get_or_create_radio_em(dm_easy_mesh_t *dm, const unsigned char *ruid);
+
 public:
 
     static em_ctrl_t *get_em_ctrl_instance();
