@@ -74,7 +74,7 @@ ifeq ($(WITH_SAP), 1)
 LIBDIRS += -L$(AL_SAP_HOME)/build/lib
 endif
 
-LIBS = -lgcc -lc -lm -lpthread -ldl -lcjson -luuid -lssl -lcrypto -lwebconfig -lhebus -lmariadb -lstdc++fs
+LIBS = -lgcc -lc -lm -lpthread -ldl -lcjson -luuid -lssl -lcrypto -lwebconfig -lhebus -lsqlite3 -lstdc++fs
 
 ifeq ($(WITH_SAP), 1)
 LIBS += -lalsap
@@ -130,7 +130,16 @@ AGENT_SOURCES = $(wildcard $(ONEWIFI_EM_SRC)/em/*.cpp) \
 -include $(ONEWIFI_EM_HOME)/uwm-private-ext/uwm-private-ext.mk
 AGENT_SOURCES += $(UWM_PRIVATE_EXT_AGENT_SOURCES)
 
-AGENT_OBJECTS = $(AGENT_SOURCES:.cpp=.o)
+ifneq ($(strip $(UWM_VENDOR_EXT_DIR)),)
+UWM_VENDOR_EXT_TARGET = agent
+-include $(UWM_VENDOR_EXT_DIR)/vendor-ext.mk
+ifneq ($(strip $(UWM_VENDOR_EXT_INC_DIR)),)
+CXXFLAGS += -I$(UWM_VENDOR_EXT_INC_DIR)
+endif
+endif
+
+AGENT_CORE_OBJECTS = $(AGENT_SOURCES:.cpp=.o)
+AGENT_OBJECTS = $(AGENT_CORE_OBJECTS) $(UWM_VENDOR_EXT_OBJECTS)
 GENERIC_OBJECTS = $(GENERIC_SOURCES:.c=.o) 
 ALLOBJECTS = $(AGENT_OBJECTS) $(GENERIC_OBJECTS)
 
@@ -142,7 +151,7 @@ $(PROGRAM): $(ALLOBJECTS)
 $(GENERIC_OBJECTS): %.o: %.c
 	$(CC) $(CXXFLAGS) -o $@ -c $<
 
-$(AGENT_OBJECTS): %.o: %.cpp
+$(AGENT_CORE_OBJECTS): %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -o $@ -c $<
 
 # Clean target: "make -f Makefile.Linux clean" to remove unwanted objects and executables.

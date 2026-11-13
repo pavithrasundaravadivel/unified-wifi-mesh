@@ -23,21 +23,7 @@
 #include "em_msg.h"
 #include "dm_easy_mesh.h"
 #include "em_cmd.h"
-    
-// Weak factory fallback: Returns nullptr if custom extension code is omitted
-__attribute__((weak)) em_vendor_ext_interface_t* create_em_vendor_ext() {
-    return nullptr;
-}
-
-unsigned int em_vendor_t::get_vendor_id(unsigned char *buff) 
-{
-    em_vendor_specific_t *vendor_data = reinterpret_cast<em_vendor_specific_t *> (buff);
-    // vendor_data->data layout: [attr_id (1 byte)][vendor_data...]
-    unsigned char attr_id = vendor_data->data[0];
-    em_printfout("vendor_data->attri [%d]", attr_id);
-
-    return static_cast<unsigned int>(attr_id);
-}
+#include "em_ext_hooks.h"
 
 int em_vendor_t::handle_vendor_msg(unsigned char *buff, unsigned int len)
 {
@@ -46,7 +32,7 @@ int em_vendor_t::handle_vendor_msg(unsigned char *buff, unsigned int len)
     char *errors[EM_MAX_TLV_MEMBERS] = {0};
 
     if (em_msg_t(em_msg_type_topo_vendor, get_profile_type(), buff, len).validate(errors) == 0) {
-        printf("%s:%d: Vendor msg validation failed\n", __func__, __LINE__);
+        em_printfout("Vendor msg validation failed");
         return -1;
     }
 
@@ -59,12 +45,9 @@ int em_vendor_t::handle_vendor_msg(unsigned char *buff, unsigned int len)
     while ((tlv->type != em_tlv_type_eom) && (tmp_len > 0)) {
         if (tlv->type == em_tlv_type_vendor_specific) {
             em_vendor_specific_t *vendor_tlv = reinterpret_cast<em_vendor_specific_t *> (tlv->value);
-            em_printfout("------->> Recvd vendor tlv, tlv->len:%d", ntohs(tlv->len));
-            if (ntohs(tlv->len) == 0) {
-                break;
-            }
-
-            if (memcmp(vendor_tlv->vendor_oui, comcast_vendor_oui, EM_VENDOR_OUI_SIZE) == 0) {
+            em_printfout("Recvd vendor tlv, tlv->len:%d", ntohs(tlv->len));
+            if ((ntohs(tlv->len) > EM_VENDOR_OUI_SIZE) &&
+                (memcmp(vendor_tlv->vendor_oui, comcast_vendor_oui, EM_VENDOR_OUI_SIZE) == 0)) {
                 // vendor_tlv->data layout: [attr_id (1 byte)][vendor_data...]
                 em_printfout("Vendor data attr_id [%d]", vendor_tlv->data[0]);
 
@@ -83,12 +66,7 @@ int em_vendor_t::handle_vendor_tlv_ext(const unsigned char *tlv_value,
                                         unsigned int         tlv_len,
                                         dm_easy_mesh_t      *dm)
 {
-    if (m_vendor_ext) {
-        em_printfout("Coming here %s:%d\n", __func__, __LINE__);
-        return m_vendor_ext->handle_vendor_tlv_ext(tlv_value, tlv_len, dm);
-    }
-    em_printfout("Coming here %s:%d\n", __func__, __LINE__);
-    return 0; // Default base fallback
+    return em_get_ext_hooks()->handle_vendor_tlv_ext(tlv_value, tlv_len, dm);
 }
 
 int em_vendor_t::build_vendor_tlv_ext(const unsigned char *raw_data,
@@ -96,14 +74,11 @@ int em_vendor_t::build_vendor_tlv_ext(const unsigned char *raw_data,
                                        unsigned char       *tlv_value,
                                        unsigned int        *tlv_val_len)
 {
-    if (m_vendor_ext) {
-        return m_vendor_ext->build_vendor_tlv_ext(raw_data, raw_len, tlv_value, tlv_val_len);
-    }
-    return -1; // No private extension available; nothing to send
+    return em_get_ext_hooks()->build_vendor_tlv_ext(raw_data, raw_len, tlv_value, tlv_val_len);
 }
 
 // Sends the raw stats_arg_t[] bytes from the current vendor-data cmd
-// directly as the vendor TLV payload — no dm_sta_ext_t access needed.
+// directly as the vendor TLV payload - no dm_sta_ext_t access needed.
 int em_vendor_t::send_vendor_msg()
 {
     em_cmd_t *cmd = get_current_cmd();
@@ -113,12 +88,12 @@ int em_vendor_t::send_vendor_msg()
 
     const std::vector<uint8_t> *raw = cmd->get_raw_data();
     if (!raw || raw->empty()) {
+        // Nothing to send; complete the cmd so it does not hold the radio until timeout
+        cmd->processed = true;
         return 0;
     }
 
-    em_printfout("-------> Sending vendor message with raw data size: %zu\n", raw->size());
-    // em_printfout("-------> cmdd state: %s", em_t::state_2_str(get_current_cmd()->get_state()));
-
+    em_printfout("Sending vendor message with raw data size: %zu", raw->size());
 
     unsigned char buff[MAX_EM_BUFF_SZ * EM_MAX_RADIO_PER_AGENT] = {0};
     unsigned char *tmp = buff;
@@ -145,14 +120,26 @@ int em_vendor_t::send_vendor_msg()
     tmp += sizeof(em_cmdu_t); len += sizeof(em_cmdu_t);
 
     /* Vendor-specific TLV: attribute bytes built privately (see build_vendor_tlv_ext) */
+    // Reserve room for the vendor TLV header, its maximum value and the end-of-message TLV
+    if ((len + 2 * sizeof(em_tlv_t) + EM_VENDOR_TLV_MAX_LEN) > sizeof(buff)) {
+        em_printfout("Vendor msg buffer too small; skipping send");
+        cmd->processed = true;
+        return -1;
+    }
     tlv = reinterpret_cast<em_tlv_t *>(tmp);
     tlv->type = em_tlv_type_vendor_specific;
     unsigned int tlv_val_len = 0;
     if (build_vendor_tlv_ext(raw->data(), static_cast<unsigned int>(raw->size()), tlv->value, &tlv_val_len) != 0) {
         em_printfout("No vendor extension available to build vendor TLV; skipping send");
+        cmd->processed = true;
         return -1;
     }
-    em_printfout("Vendor TLV value length: %u\n", tlv_val_len);
+    if (tlv_val_len > EM_VENDOR_TLV_MAX_LEN) {
+        em_printfout("Vendor TLV value length %u exceeds max %d; skipping send", tlv_val_len, EM_VENDOR_TLV_MAX_LEN);
+        cmd->processed = true;
+        return -1;
+    }
+    em_printfout("Vendor TLV value length: %u", tlv_val_len);
     tlv->len = htons(static_cast<unsigned short>(tlv_val_len));
     tmp += sizeof(em_tlv_t) + tlv_val_len;
     len += sizeof(em_tlv_t) + tlv_val_len;
@@ -164,9 +151,9 @@ int em_vendor_t::send_vendor_msg()
     len += sizeof(em_tlv_t);
 
     int ret = send_frame(buff, static_cast<unsigned int>(len));
-    if (ret == 0) {
+    if (ret >= 0) {
         cmd->processed = true;
-        em_printfout("Vendor msg sent and proceesd cmd set to true: %u\n", tlv_val_len);
+        em_printfout("Vendor msg sent and processed cmd set to true: %u", tlv_val_len);
     }
     return ret;
 }
@@ -179,12 +166,12 @@ void em_vendor_t::process_agent_state()
         return;
     }
 
-    em_printfout("WEI debug: process_agent_state entered, cmd type:%d processed:%d", cmd->get_type(), cmd->processed);
+    em_printfout("Vendor data: process_agent_state entered, cmd type:%d processed:%d", cmd->get_type(), cmd->processed.load());
 
     switch (cmd->get_type()) {
-        case em_cmd_type_generic_data:
+        case em_cmd_type_vendor_data:
             if (cmd->processed == false) {
-                em_printfout("WEI debug: calling send_vendor_msg()");
+                em_printfout("Vendor data: calling send_vendor_msg()");
                 send_vendor_msg();
             }
             break;
@@ -192,18 +179,4 @@ void em_vendor_t::process_agent_state()
         default:
             break;
     }
-}
-
-em_vendor_t::em_vendor_t()
-    : m_vendor_ext(create_em_vendor_ext())
-{
-    // Base initialization logic here
-}
-
-em_vendor_t::~em_vendor_t()
-{
-    // Safe! ~em_vendor_ext_interface_t() is virtual, so delete cleanly destroys
-    // the private instance without needing custom headers included here.
-    delete m_vendor_ext;
-    m_vendor_ext = nullptr;
 }

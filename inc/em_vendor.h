@@ -27,33 +27,10 @@ class dm_easy_mesh_t;
 class em_cmd_t;
 class em_mgr_t;
 
-
-/**
- * Abstract interface for private vendor extensions.
- */
-class em_vendor_ext_interface_t {
-public:
-    virtual ~em_vendor_ext_interface_t() = default;
-
-    virtual int handle_vendor_tlv_ext(const unsigned char *tlv_value,
-                                       unsigned int         tlv_len,
-                                       dm_easy_mesh_t      *dm) = 0;
-
-    // Builds the vendor-specific attribute bytes (OUI + num + attr_id + payload)
-    // for tlv->value, given the raw data queued on the current cmd. Returns 0
-    // on success and fills *tlv_val_len, non-zero if nothing should be sent.
-    virtual int build_vendor_tlv_ext(const unsigned char *raw_data,
-                                      unsigned int         raw_len,
-                                      unsigned char       *tlv_value,
-                                      unsigned int        *tlv_val_len) = 0;
-
-};
-
-em_vendor_ext_interface_t* create_em_vendor_ext();
+// Largest vendor TLV value build_vendor_tlv_ext() may write; keeps the CMDU within a single unfragmented frame
+#define EM_VENDOR_TLV_MAX_LEN MAX_EM_BUFF_SZ
 
 class em_vendor_t {
-private:
-    em_vendor_ext_interface_t *m_vendor_ext;
 public:
     virtual dm_easy_mesh_t  *get_data_model() = 0;
     virtual em_state_t       get_state() = 0;
@@ -63,18 +40,15 @@ public:
     virtual em_cmd_t        *get_current_cmd() = 0;
     virtual em_profile_type_t get_profile_type() = 0;
 
-    unsigned int get_vendor_id(unsigned char *buff);
     // Dispatches to the appropriate handler based on the TLV's attr_id.
     int handle_vendor_msg(unsigned char *buff, unsigned int len);
 
-    // Weak hook for unrecognised attr_ids — overridden by private repo
-    // to parse vendor STA private TLVs and populate dm_sta_ext_t.
+    // Forwards a received vendor-specific TLV to the vendor extension, if any.
     virtual int handle_vendor_tlv_ext(const unsigned char *tlv_value,
                                unsigned int         tlv_len,
                                dm_easy_mesh_t      *dm);
 
-    // Weak hook for building vendor TLV payloads — overridden by private
-    // repo to encode WEI stats as a vendor-specific attribute.
+    // Asks the vendor extension to build the vendor TLV payload, if any.
     virtual int build_vendor_tlv_ext(const unsigned char *raw_data,
                                unsigned int         raw_len,
                                unsigned char       *tlv_value,
@@ -91,15 +65,10 @@ public:
     void process_agent_state(em_cmd_event_type_t type);
 
     // Send: packages m_raw_data from the current cmd as a vendor TLV CMDU.
-    // int send_vendor_sta_lq_data();
-
     int send_vendor_msg();
 
-    // Helper getter for the extension pointer
-    em_vendor_ext_interface_t* get_ext() const { return m_vendor_ext; }
-
-    em_vendor_t();
-    virtual ~em_vendor_t();
+    em_vendor_t() = default;
+    virtual ~em_vendor_t() = default;
 };
 
 #endif // EM_VENDOR_H

@@ -42,7 +42,6 @@ INCLUDEDIRS = \
 	-I$(ONEWIFI_HOME)/source/platform/linux/he_bus/inc \
 	-I$(ONEWIFI_HOME)/source/ccsp \
 	-I$(STAGING_DIR)/usr/include \
-	-I$(STAGING_DIR)/usr/include/mysql \
 
 ifeq ($(WITH_SAP), 1)
 INCLUDEDIRS += -I$(AL_SAP_HOME)/include
@@ -85,7 +84,7 @@ else
 LIBDIRS += -L$(INSTALLDIR)/lib/platform/darwin
 endif
 
-LIBS = -lm -pthread -ldl -luuid -lcjson -lssl -lcrypto -lhebus -lmariadb -lstdc++fs
+LIBS = -lm -pthread -ldl -luuid -lcjson -lssl -lcrypto -lhebus -lsqlite3 -lstdc++fs
 
 ifeq ($(WITH_SAP), 1)
 LIBS += -lalsap
@@ -122,7 +121,16 @@ CTRL_SOURCES = $(wildcard $(ONEWIFI_EM_SRC)/em/*.cpp) \
 -include $(ONEWIFI_EM_HOME)/uwm-private-ext/uwm-private-ext.mk
 CTRL_SOURCES += $(UWM_PRIVATE_EXT_CTRL_SOURCES)
 
-CTRL_OBJECTS = $(CTRL_SOURCES:.cpp=.o)
+ifneq ($(strip $(UWM_VENDOR_EXT_DIR)),)
+UWM_VENDOR_EXT_TARGET = ctrl
+-include $(UWM_VENDOR_EXT_DIR)/vendor-ext.mk
+ifneq ($(strip $(UWM_VENDOR_EXT_INC_DIR)),)
+CXXFLAGS += -I$(UWM_VENDOR_EXT_INC_DIR)
+endif
+endif
+
+CTRL_CORE_OBJECTS = $(CTRL_SOURCES:.cpp=.o)
+CTRL_OBJECTS = $(CTRL_CORE_OBJECTS) $(UWM_VENDOR_EXT_OBJECTS)
 GENERIC_OBJECTS = $(GENERIC_SOURCES:.c=.o) 
 ALLOBJECTS = $(CTRL_OBJECTS) $(GENERIC_OBJECTS)
 
@@ -134,7 +142,7 @@ $(PROGRAM): $(ALLOBJECTS)
 $(GENERIC_OBJECTS): %.o: %.c
 	$(CC) $(CXXFLAGS) -o $@ -c $<
 
-$(CTRL_OBJECTS): %.o: %.cpp
+$(CTRL_CORE_OBJECTS): %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -o $@ -c $<
 
 # Clean everything

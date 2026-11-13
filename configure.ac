@@ -41,7 +41,8 @@ AM_CONDITIONAL([EM_ASAN_CTRL], [test "x$EM_ASAN_CTRL" = "xtrue"])
 # Check for ASAN in em_agent
 AM_CONDITIONAL([EM_ASAN_AGENT], [test "x$EM_ASAN_AGENT" = "xtrue"])
 
-AM_CONDITIONAL([HAVE_UWM_PRIVATE_EXT], [test -d "$srcdir/uwm-private-ext/src"])
+AC_ARG_VAR([UWM_VENDOR_EXT_DIR], [path to vendor-provided extension sources])
+AC_SUBST([UWM_VENDOR_EXT_DIR])
 
 # Checks for programs.
 AC_PROG_CC
@@ -51,7 +52,8 @@ AM_PROG_CC_C_O
 AM_PROG_LIBTOOL(libtool)
  
 # Checks for header files.
-AC_CHECK_HEADERS([stdlib.h string.h unistd.h])
+AC_CHECK_HEADERS([stdlib.h string.h unistd.h sqlite3.h])
+AC_CHECK_LIB([sqlite3], [sqlite3_open], [], [AC_MSG_ERROR([SQLite3 library is required])])
  
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL

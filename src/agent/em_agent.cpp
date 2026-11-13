@@ -35,6 +35,7 @@
 #include <pthread.h>
 #include <cjson/cJSON.h>
 #include "em_agent.h"
+#include "em_ext_hooks.h"
 #include "em_msg.h"
 #include "ieee80211.h"
 #include "em_cmd_agent.h"
@@ -899,6 +900,10 @@ void em_agent_t::handle_unassoc_sta_result(em_bus_event_t *evt)
 
 int em_agent_t::send_unassoc_sta_query_subdoc(wifi_bus_desc_t *desc, bus_handle_t *bus_hdl, em_unassoc_work_list_t *work)
 {
+    unsigned int vap_index = 0;
+    bool found = false;
+    mac_address_t target_ruid = {0};
+
     if ((desc == NULL) || (bus_hdl == NULL) || (work == NULL)) {
         em_printfout("%s:%d Invalid input params desc=%p bus_hdl=%p work=%p",
                      __func__, __LINE__, desc, bus_hdl, work);
@@ -996,8 +1001,70 @@ int em_agent_t::send_unassoc_sta_query_subdoc(wifi_bus_desc_t *desc, bus_handle_
     bus_data.raw_data.bytes = json_str;
     bus_data.raw_data_len = strlen(json_str);
 
-    if (desc->bus_set_fn(bus_hdl, "Device.WiFi.UnAssoc.STA", &bus_data) != 0) {
-        em_printfout("%s:%d Unassoc subdoc send failed",  __func__, __LINE__);
+    if (cJSON_GetArraySize(query_list) == 0) {
+        em_printfout("%s:%d Unassoc STA query has no operating classes", __func__, __LINE__);
+        free(json_str);
+        cJSON_Delete(root);
+        return -1;
+    }
+
+    bool ruid_resolved = false;
+    for (unsigned int i = 0; i < m_data_model.get_num_op_class(); i++) {
+        dm_op_class_t *opclass = m_data_model.get_op_class(i);
+
+        if (opclass == nullptr) {
+            continue;
+        }
+
+        if (opclass->m_op_class_info.op_class == work->opclass_list[0].op_class) {
+            memcpy(target_ruid, opclass->m_op_class_info.id.ruid, sizeof(mac_address_t));
+            ruid_resolved = true;
+            break;
+        }
+    }
+
+    if (!ruid_resolved) {
+        em_printfout("%s:%d Failed to resolve RUID for opclass=%u", __func__, __LINE__, (unsigned int)work->opclass_list[0].op_class);
+        free(json_str);
+        cJSON_Delete(root);
+        return -1;
+    }
+
+    /* Find AP BSS for this RUID */
+    for (unsigned int i = 0; i < m_data_model.get_num_bss(); i++) {
+        em_bss_info_t *bss = m_data_model.get_bss_info(i);
+        if (bss == nullptr) {
+            continue;
+        }
+
+        if (bss->vap_mode != em_vap_mode_ap) {
+            continue;
+        }
+
+        if (memcmp(bss->ruid.mac, target_ruid, sizeof(mac_address_t)) == 0) {
+            vap_index = bss->vap_index;
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        em_printfout("%s:%d Failed to resolve AP VAP index for opclass=%u", __func__, __LINE__,
+                      static_cast<unsigned int>(work->opclass_list[0].op_class));
+        free(json_str);
+        cJSON_Delete(root);
+        return -1;
+    }
+
+    char bus_path[128] = {0};
+    snprintf(bus_path, sizeof(bus_path), "Device.WiFi.AccessPoint.%u.X_RDKCENTRAL-COM_GetNaSta", vap_index + 1);
+
+    raw_data_t out_data;
+    memset(&out_data, 0, sizeof(raw_data_t));
+
+    int rc = desc->bus_method_invoke_fn(bus_hdl,NULL, bus_path, &bus_data, &out_data, 1);
+    if (rc != bus_error_success) {
+        em_printfout("%s:%d Unassoc STA subdoc send failed",  __func__, __LINE__);
         free(json_str);
         cJSON_Delete(root);	
         return -1;
@@ -1337,17 +1404,15 @@ void em_agent_t::handle_link_stats_report(em_bus_event_t *evt)
     }
 }
 
-void em_agent_t::handle_wei_app_data(em_bus_event_t *evt)
+void em_agent_t::handle_vendor_data(em_bus_event_t *evt)
 {
     em_cmd_t *pcmd[EM_MAX_CMD] = {NULL};
     unsigned int num;
 
-    /* if (m_orch->is_cmd_type_in_progress(evt) == true) {
-        em_printfout("analyze_wei_app_data in progress");
-    } else */ if ((num = static_cast<unsigned int>(m_data_model.analyze_wei_app_data(evt, pcmd))) == 0) {
-        em_printfout("analyze_wei_app_data failed");
+    if ((num = static_cast<unsigned int>(m_data_model.analyze_vendor_data(evt, pcmd))) == 0) {
+        em_printfout("analyze_vendor_data failed");
     } else if (m_orch->submit_commands(pcmd, num) > 0) {
-        em_printfout("Submitted WEI app data cmd for orch");
+        em_printfout("Submitted vendor data cmd for orch");
     }
 }
 
@@ -1474,8 +1539,8 @@ void em_agent_t::handle_bus_event(em_bus_event_t *evt)
             handle_unassoc_sta_result(evt);
             break;
 
-        case em_bus_event_type_wei_app_data:
-            handle_wei_app_data(evt);
+        case em_bus_event_type_vendor_data:
+            handle_vendor_data(evt);
             break;
 
         default:
@@ -1576,8 +1641,9 @@ bool em_agent_t::refresh_current_radio_data(const unsigned char *ruid)
         return false;
     }
 
-    dm_easy_mesh_agent_t radio_snapshot;
-    radio_snapshot.translate_onewifi_dml_data(reinterpret_cast<char *>(data.raw_data.bytes));
+    // Too large for the stack (~800 KB), so allocate it
+    dm_easy_mesh_agent_t *radio_snapshot = new dm_easy_mesh_agent_t();
+    radio_snapshot->translate_onewifi_dml_data(reinterpret_cast<char *>(data.raw_data.bytes));
     if (desc->bus_data_free_fn != nullptr) {
         desc->bus_data_free_fn(&data);
     } else {
@@ -1585,8 +1651,8 @@ bool em_agent_t::refresh_current_radio_data(const unsigned char *ruid)
     }
 
     unsigned int num_op_class = m_data_model.get_num_op_class();
-    for (unsigned int index = 0; index < radio_snapshot.get_num_op_class(); ++index) {
-        em_op_class_info_t *snapshot_op_class = radio_snapshot.get_op_class_info(index);
+    for (unsigned int index = 0; index < radio_snapshot->get_num_op_class(); ++index) {
+        em_op_class_info_t *snapshot_op_class = radio_snapshot->get_op_class_info(index);
         if (snapshot_op_class->id.type != em_op_class_type_current ||
             memcmp(snapshot_op_class->id.ruid, ruid, sizeof(mac_address_t)) != 0 ||
             snapshot_op_class->op_class == 0 || snapshot_op_class->channel == 0) {
@@ -1611,6 +1677,7 @@ bool em_agent_t::refresh_current_radio_data(const unsigned char *ruid)
         *m_data_model.get_op_class_info(existing_index) = *snapshot_op_class;
     }
 
+    delete radio_snapshot;
     return has_current_radio_channel();
 }
 
@@ -1846,10 +1913,7 @@ void em_agent_t::input_listener()
         return;
     }
 
-    // WEI stats/events are now consumed directly from the LQ UDS socket by
-    // lq_agent_listener_start() (see custom/src/agent/lq_agent_listener.cpp),
-    // superseding the old "Device.WiFi.EM.WEIData" bus subscription.
-    lq_agent_listener_start();
+    em_get_ext_hooks()->on_bus_ready(&m_bus_hdl, desc);
 
     io(NULL);
 }
@@ -1880,14 +1944,14 @@ int em_agent_t::unassoc_sta_link_metrics_cb(char *event_name, bus_data_prop_t *d
         return -1;
     }
 
-    if (strcmp(subdoc_name->valuestring, "UnassocStaLinkMetricsResponse") != 0) {
+    if (strcmp(subdoc_name->valuestring, "UnassocStaQuery") != 0) {
         em_printfout("%s:%d unexpected SubDocName=%s",__func__, __LINE__, subdoc_name->valuestring);
         cJSON_Delete(json);
         return -1;
     }
 
-    cJSON *resp = cJSON_GetObjectItemCaseSensitive(json, "UnassocStaLinkMetricsResponse");
-    if ((resp == NULL) || (!cJSON_IsArray(resp))) {
+    cJSON *resp = cJSON_GetObjectItemCaseSensitive(json, "UnassociatedSTALinkMetricsResponse");
+    if ((resp == NULL) || (!cJSON_IsObject(resp))) {
         em_printfout("%s:%d response array missing",__func__,__LINE__);
         cJSON_Delete(json);
         return -1;
@@ -2213,7 +2277,7 @@ em_t *em_agent_t::find_em_for_msg_type(unsigned char *data, unsigned int len, em
 				if (em->is_matching_freq_band(&band) == true) {
 					if ((em->get_state() != em_state_agent_autoconfig_renew_pending) && (em->get_state() !=em_state_agent_wsc_m2_pending) && 
                         (em->get_state() != em_state_agent_owconfig_pending) && (em->get_state() != em_state_agent_1905_securing) &&
-                        (em->get_state() != em_state_agent_wsc_m2_config_skipping)) {
+                        (em->get_state() != em_state_agent_wsc_m2_processed)) {
 						found = true;
 						break;
 					} else {
@@ -2267,7 +2331,9 @@ em_t *em_agent_t::find_em_for_msg_type(unsigned char *data, unsigned int len, em
 				if (em->is_matching_freq_band(&band) == true) {
 					/* Accept renew in owconfig_pending too: the apply confirmation
 					 * never arrived and renew is the mechanism to recover that. */
-					if ((em->get_state() != em_state_agent_autoconfig_renew_pending) && (em->get_state() !=em_state_agent_wsc_m2_pending)) {
+					if ((em->get_state() != em_state_agent_autoconfig_renew_pending) &&
+					    (em->get_state() != em_state_agent_wsc_m2_pending) &&
+					    (em->get_state() != em_state_agent_wsc_m2_processed)) {
 						em_printfout("Found matching band %d for autoconfig renew request, received controller AL MAC is %s", band, al_mac_str);
 						found = true;
 						break;

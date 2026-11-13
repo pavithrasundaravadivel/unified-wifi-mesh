@@ -349,7 +349,7 @@ public:
     }
 
 	virtual bool refresh_current_radio_data(const unsigned char *) {
-		printf("refresh_current_radio_data not implemented\n");
+		em_printfout("refresh_current_radio_data not implemented");
 		return false;
 	}
 

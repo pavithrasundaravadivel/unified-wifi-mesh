@@ -43,6 +43,7 @@
 #include "em_msg.h"
 #include "em_cmd_exec.h"
 #include "util.h"
+#include "em_ext_hooks.h"
 
 /*
  * Bit mask for BSS Color + BSS Load Present field in Channel Scan Report Message.
@@ -1034,6 +1035,7 @@ int em_channel_t::send_channel_sel_request_msg()
         return -1;
     }
     m_chan_req_msg_id = ntohs(cmdu->id);
+    m_channel_sel_ocr_received = false;
     em_printfout("Channel Selection Request message sent (msg_id: 0x%04x)\n", m_chan_req_msg_id);
 
     return static_cast<int> (len);
@@ -1674,10 +1676,9 @@ int em_channel_t::handle_op_channel_report(unsigned char *buff, unsigned int len
     dm_easy_mesh_t::macbytes_to_string(ruid, ruid_str);
     em_t *radio_em = reinterpret_cast<em_t *>(hash_map_get(get_mgr()->m_em_map, ruid_str));
     if (radio_em) {
-        // Accept both em_state_ctrl_channel_selected (normal mode: OCR arrives after chan sel resp)
-        // and em_state_ctrl_channel_select_pending (passive mode: OCR arrives before chan sel resp).
-        if (radio_em->get_state() == em_state_ctrl_channel_selected ||
-            radio_em->get_state() == em_state_ctrl_channel_select_pending) {
+        if (radio_em->get_state() == em_state_ctrl_channel_select_pending) {
+            radio_em->m_channel_sel_ocr_received = true;
+        } else if (radio_em->get_state() == em_state_ctrl_channel_selected) {
             radio_em->set_state(em_state_ctrl_configured);
             em_printfout("Set em_state_ctrl_configured for radio %s", ruid_str);
         }
@@ -1979,21 +1980,8 @@ int em_channel_t::handle_channel_sel_req(unsigned char *buff, unsigned int len)
 
 	op_class.freq_band = get_band();
 
-    if (get_mgr()->is_passive()) {
-        // In passive mode: do not apply the channel change to OneWifi.
-        // Send an Operating Channel Report immediately with the current (unchanged) channel.
-        // (We cannot rely on process_state() being called for em_state_agent_channel_report_pending
-        // because that path is only dispatched for op_channel_report/channel_pref_query commands.)
-        em_printfout("Passive mode: skipping channel change to OneWifi, sending operating channel report with current channel");
-        if (!get_mgr()->refresh_current_radio_data(get_radio_interface_mac())) {
-            em_printfout("Could not refresh current operating channel for radio %s",
-                util::mac_to_string(get_radio_interface_mac()).c_str());
-        }
-        if (send_operating_channel_report_msg() < 0) {
-            em_printfout("Warning: Operating Channel Report failed for radio %s",
-                util::mac_to_string(get_radio_interface_mac()).c_str());
-        }
-        set_state(em_state_agent_configured);
+    if (em_get_ext_hooks()->intercept_agent_event(static_cast<em_t *> (this), em_bus_event_type_channel_sel_req,
+            reinterpret_cast<unsigned char *> (&op_class), sizeof(op_class_channel_sel))) {
         return 0;
     }
 
@@ -2026,10 +2014,13 @@ int em_channel_t::handle_channel_sel_rsp(unsigned char *buff, unsigned int len)
             dm_easy_mesh_t::macbytes_to_string(ruid, mac_str);
             em_t *radio_em = reinterpret_cast<em_t *>(hash_map_get(get_mgr()->m_em_map, mac_str));
             if (radio_em) {
-                if((radio_em->get_state() == em_state_ctrl_channel_select_pending) && (response_msg_id == radio_em->m_chan_req_msg_id)) {
-                    radio_em->set_state(em_state_ctrl_channel_selected);
+                if ((radio_em->get_state() == em_state_ctrl_channel_select_pending) &&
+                    (response_msg_id == radio_em->m_chan_req_msg_id)) {
+                    radio_em->set_state(radio_em->m_channel_sel_ocr_received ?
+                        em_state_ctrl_configured : em_state_ctrl_channel_selected);
                     radio_em->m_chan_req_msg_id = 0;
-                    em_printfout("Set em_state_ctrl_channel_selected for radio %s", mac_str);
+                    radio_em->m_channel_sel_ocr_received = false;
+                    em_printfout("Set channel selection response state for radio %s", mac_str);
                 }
             } else {
                 em_printfout("No EM instance found for radio %s", mac_str);
@@ -2556,4 +2547,3 @@ em_channel_t::em_channel_t()
 em_channel_t::~em_channel_t()
 {
 }
-
