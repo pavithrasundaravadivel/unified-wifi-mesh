@@ -34,8 +34,6 @@
 class em_cmd_ctrl_t;
 class AlServiceAccessPoint;
 
-void em_topo_stream_send_topology(const char *topology_json);
-
 class em_ctrl_t : public em_mgr_t {
 
     static em_ctrl_t *s_em_ctrl;
@@ -475,6 +473,9 @@ public:
 	 * @note Ensure that the event structure is properly initialized before passing it to this function.
 	 */
 	void handle_sta_assoc_event(em_bus_event_t *evt);
+	void handle_sta_cap_update(em_bus_event_t *evt);
+	void handle_sta_mld_update(em_bus_event_t *evt);
+	void handle_topo_publish(em_bus_event_t *evt);
     
 	/**!
 	 * @brief Handles the MLD reconfiguration event.
@@ -562,7 +563,7 @@ public:
 	/**!
 	 * @brief Publish the network topology using the data model.
 	 *
-	 * This function publishes the current network topology over the bus.
+	 * Queues publication of the current network topology on the controller event thread.
 	 *
 	 * @note Ensure that `m_data_model` is properly updated before calling this function.
 	 */

@@ -192,7 +192,6 @@ void dm_network_t::operator = (const dm_network_t& obj)
     this->m_net_info.media = obj.m_net_info.media;
     this->m_net_info.ctrl_id.media = obj.m_net_info.ctrl_id.media;
     this->m_net_info.colocated_agent_id.media = obj.m_net_info.colocated_agent_id.media;
-    em_printfout("Network:%s operator= copied media:0x%x", obj.m_net_info.id, static_cast<unsigned int>(obj.m_net_info.media));
 }
 
 int dm_network_t::init()
