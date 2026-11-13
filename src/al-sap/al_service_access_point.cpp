@@ -219,22 +219,6 @@ void AlServiceAccessPoint::serviceAccessPointDataRequest(AlServiceDataUnit& mess
             }
 
 }
-
-// Reports whether receiveBuffer already holds at least one complete
-// length-prefixed frame. Purely inspects the local buffer: it never calls
-// recv(), so the caller can safely use it to decide whether to drain another
-// already-received message without risking a block on a partial frame.
-bool AlServiceAccessPoint::hasBufferedMessage() const {
-    if (receiveBuffer.size() < sizeof(uint32_t)) {
-        return false;
-    }
-    uint32_t frameLen = (static_cast<uint32_t>(receiveBuffer[0]) << 24)
-                      | (static_cast<uint32_t>(receiveBuffer[1]) << 16)
-                      | (static_cast<uint32_t>(receiveBuffer[2]) << 8)
-                      |  static_cast<uint32_t>(receiveBuffer[3]);
-    return receiveBuffer.size() >= sizeof(uint32_t) + frameLen;
-}
-
 // Executes service indication primitive (receive a message through the socket)
 AlServiceDataUnit AlServiceAccessPoint::serviceAccessPointDataIndication() {
     std::vector<unsigned char> payload;
@@ -263,7 +247,7 @@ AlServiceDataUnit AlServiceAccessPoint::serviceAccessPointDataIndication() {
         }
 #ifdef DEBUG_MODE
         std::cout << "Received fragment " << static_cast<int>(fragment.getFragmentId())
-                  << " - Size: " << buffer.size() << " bytes, "
+                  << " - Size: " << bytesRead << " bytes, "
                   << "isFragment: " << static_cast<int>(fragment.getIsFragment()) << ", "
                   << "FragmentId: " << static_cast<int>(fragment.getFragmentId()) << ", "
                   << "isLastFragment: " << static_cast<int>(fragment.getIsLastFragment()) << std::endl;
@@ -275,6 +259,7 @@ AlServiceDataUnit AlServiceAccessPoint::serviceAccessPointDataIndication() {
             #endif
             return fragment; // Return immediately, as no reassembly is needed
         }
+        #ifdef DEBUG_MODE
         // Fragmented message handling
 #ifdef DEBUG_MODE
         std::cout << "Received fragment " << static_cast<int>(fragment.getFragmentId()) << " of the message." << std::endl;
