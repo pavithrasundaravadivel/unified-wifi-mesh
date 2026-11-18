@@ -28,7 +28,7 @@ class em_cmd_t;
 class em_mgr_t;
 
 // Largest vendor TLV value build_vendor_tlv_ext() may write; keeps the CMDU within a single unfragmented frame
-#define EM_VENDOR_TLV_MAX_LEN MAX_EM_BUFF_SZ
+#define EM_VENDOR_TLV_MAX_LEN (MAX_EM_BUFF_SZ * 2)
 
 class em_vendor_t {
 public:
